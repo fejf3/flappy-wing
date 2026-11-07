@@ -1,0 +1,6 @@
+{
+  "name": "Flappy Bird 2013 — Pixel-Perfect Retro Edition",
+  "description": "A 100% faithful, pixel-perfect HTML5 Canvas clone of the 2013 Flappy Bird with procedural pixel-art sprites, 60 FPS fixed-timestep physics, and Web Audio API sound synthesis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

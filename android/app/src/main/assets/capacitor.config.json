@@ -1,0 +1,16 @@
+{
+	"appId": "com.flappywing.arcade",
+	"appName": "FLAPPY WING",
+	"webDir": "dist",
+	"backgroundColor": "#090d16",
+	"android": {
+		"allowMixedContent": false,
+		"captureInput": true,
+		"webContentsDebuggingEnabled": false
+	},
+	"ios": {
+		"contentInset": "always",
+		"allowsLinkPreview": false,
+		"scrollEnabled": false
+	}
+}
