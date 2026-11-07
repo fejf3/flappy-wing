@@ -9,17 +9,14 @@ import {
   Palette,
   Home,
   Share2,
-  Music,
   Vibrate,
   X,
   Trophy,
   Sliders,
-  Award,
-  Target,
-  RefreshCw,
   Shield,
   Globe,
   Lock,
+  Coins,
 } from 'lucide-react';
 import { FlappySoundEngine } from './soundEngine';
 import {
@@ -34,17 +31,7 @@ import {
   StageThemeId,
 } from './pixelSprites';
 import {
-  DailyChallengeState,
-  loadDailyChallengeState,
-  saveDailyChallengeState,
-  getActiveChallengeTemplate,
-  recordDailyChallengeEvent,
-  claimDailyChallengeReward,
-  activateNextBonusChallenge,
-} from './dailyChallenges';
-import {
   SHOP_BIRDS,
-  ACHIEVEMENTS_LIST,
   PowerUpType,
   PlayerProfileState,
   loadPlayerProfile,
@@ -52,13 +39,7 @@ import {
 } from './achievementsAndShop';
 
 type GameState = 'MAIN_MENU' | 'GET_READY' | 'PLAYING' | 'DYING' | 'GAME_OVER';
-type ActiveModal =
-  | 'none'
-  | 'settings'
-  | 'skins'
-  | 'achievements'
-  | 'leaderboard'
-  | 'ios_install';
+type ActiveModal = 'none' | 'settings' | 'skins';
 export type DifficultyLevel = 'easy' | 'normal' | 'hard';
 export type StageModeOption = 'auto' | StageThemeId;
 export type AppLanguage = 'ar' | 'en';
@@ -144,63 +125,43 @@ interface FloatingPopup {
   life: number;
 }
 
-interface LeaderboardEntry {
-  id: string;
-  playerName: string;
-  score: number;
-  difficulty: DifficultyLevel;
-  skin: string;
-  stageReached: number;
-  createdAt: string;
-}
-
-interface TelemetrySnapshot {
-  state: GameState;
-  score: number;
-  bestScore: number;
-  isNewBest: boolean;
-  stageNumber: number;
-  stageNameAr: string;
-  stageNameEn: string;
-  activeShield: boolean;
-  magnetFrames: number;
-  slowMoFrames: number;
-  birdY: number;
-  birdVy: number;
-  birdRotation: number;
-  activePipes: number;
-  fps: number;
-}
-
-const CANVAS_WIDTH = 288;
-const CANVAS_HEIGHT = 512;
-const GROUND_HEIGHT = 112;
-const GROUND_Y = CANVAS_HEIGHT - GROUND_HEIGHT; // 400
-const GRAVITY = 0.25;
-const FLAP_VELOCITY = -4.6;
-const TERMINAL_VELOCITY = 10.0;
-const BG_PARALLAX_SPEED = 0.5;
-const PIPE_WIDTH = 52;
-const HITBOX_INSET = 2;
-
 const BEST_SCORE_STORAGE_KEY = 'flappy_best_score_2013';
 const SETTINGS_STORAGE_KEY = 'flappy_settings_v3';
-const LOCAL_LEADERBOARD_CACHE_KEY = 'flappy_leaderboard_cache_v1';
+const COINS_STORAGE_KEY = 'flappy_wing_coins_v1';
+const LEGACY_DAILY_STORAGE_KEY = 'flappy_wing_daily_v1';
 
-const PILOT_CALLSIGNS = [
-  'Falcon-01',
-  'SkyAce-77',
-  'WingPro-99',
-  'DesertHawk',
-  'StarPilot',
-  'CyberEagle',
-  'GoldGlider',
-  'NovaWing',
-];
+function loadSavedCoins(): number {
+  try {
+    const raw = localStorage.getItem(COINS_STORAGE_KEY);
+    if (raw !== null) {
+      const parsed = parseInt(raw, 10);
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    }
+    // Migrate coins from previous storage if present
+    const legacyRaw = localStorage.getItem(LEGACY_DAILY_STORAGE_KEY);
+    if (legacyRaw) {
+      const legacyParsed = JSON.parse(legacyRaw);
+      if (typeof legacyParsed.coins === 'number' && legacyParsed.coins >= 0) {
+        localStorage.setItem(COINS_STORAGE_KEY, String(legacyParsed.coins));
+        return legacyParsed.coins;
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return 0;
+}
+
+function saveCoinsToStorage(coins: number): void {
+  try {
+    localStorage.setItem(COINS_STORAGE_KEY, String(Math.max(0, Math.floor(coins))));
+  } catch {
+    // ignore storage errors
+  }
+}
 
 interface SavedSettings {
   sfxEnabled: boolean;
-  musicEnabled: boolean;
   hapticsEnabled: boolean;
   difficulty: DifficultyLevel;
   skin: BirdSkinId;
@@ -215,7 +176,6 @@ function loadSavedSettings(): SavedSettings {
       const parsed = JSON.parse(raw);
       return {
         sfxEnabled: parsed.sfxEnabled ?? true,
-        musicEnabled: parsed.musicEnabled ?? false,
         hapticsEnabled: parsed.hapticsEnabled ?? true,
         difficulty: ['easy', 'normal', 'hard'].includes(parsed.difficulty)
           ? parsed.difficulty
@@ -234,7 +194,6 @@ function loadSavedSettings(): SavedSettings {
   }
   return {
     sfxEnabled: true,
-    musicEnabled: false,
     hapticsEnabled: true,
     difficulty: 'normal',
     skin: 'classic',
@@ -268,6 +227,35 @@ function resolveStageFromScore(
   return { stageNum: 1, theme: 'day', nameAr: 'المرحلة 1: النهار المشرق', nameEn: 'Stage 1: Sunny Meadow' };
 }
 
+interface TelemetrySnapshot {
+  state: GameState;
+  score: number;
+  bestScore: number;
+  isNewBest: boolean;
+  stageNumber: number;
+  stageNameAr: string;
+  stageNameEn: string;
+  activeShield: boolean;
+  magnetFrames: number;
+  slowMoFrames: number;
+  birdY: number;
+  birdVy: number;
+  birdRotation: number;
+  activePipes: number;
+  fps: number;
+}
+
+const CANVAS_WIDTH = 288;
+const CANVAS_HEIGHT = 512;
+const GROUND_HEIGHT = 112;
+const GROUND_Y = CANVAS_HEIGHT - GROUND_HEIGHT; // 400
+const GRAVITY = 0.25;
+const FLAP_VELOCITY = -4.6;
+const TERMINAL_VELOCITY = 10.0;
+const BG_PARALLAX_SPEED = 0.5;
+const PIPE_WIDTH = 52;
+const HITBOX_INSET = 2;
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const soundRef = useRef<FlappySoundEngine>(new FlappySoundEngine());
@@ -279,40 +267,20 @@ export default function App() {
   const [isPaused, setIsPaused] = useState<boolean>(false);
 
   const [sfxEnabled, setSfxEnabled] = useState<boolean>(initialSettings.current.sfxEnabled);
-  const [musicEnabled, setMusicEnabled] = useState<boolean>(initialSettings.current.musicEnabled);
   const [hapticsEnabled, setHapticsEnabled] = useState<boolean>(initialSettings.current.hapticsEnabled);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>(initialSettings.current.difficulty);
   const [selectedSkin, setSelectedSkin] = useState<BirdSkinId>(initialSettings.current.skin);
   const [stageMode, setStageMode] = useState<StageModeOption>(initialSettings.current.stageMode);
   const [language, setLanguage] = useState<AppLanguage>(initialSettings.current.language);
-  const languageRef = useRef<AppLanguage>(language);
-  useEffect(() => {
-    languageRef.current = language;
-  }, [language]);
 
-  const [dailyState, setDailyState] = useState<DailyChallengeState>(() =>
-    loadDailyChallengeState()
-  );
-  const dailyStateRef = useRef<DailyChallengeState>(dailyState);
+  const [coins, setCoins] = useState<number>(() => loadSavedCoins());
+  const coinsRef = useRef<number>(coins);
+  useEffect(() => {
+    coinsRef.current = coins;
+  }, [coins]);
 
   const [profile, setProfile] = useState<PlayerProfileState>(() => loadPlayerProfile());
   const profileRef = useRef<PlayerProfileState>(profile);
-
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(() => {
-    try {
-      const raw = localStorage.getItem(LOCAL_LEADERBOARD_CACHE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch {
-      // ignore
-    }
-    return [];
-  });
-  const [isSubmittingScore, setIsSubmittingScore] = useState<boolean>(false);
-
-  useEffect(() => {
-    dailyStateRef.current = dailyState;
-  }, [dailyState]);
-
   useEffect(() => {
     profileRef.current = profile;
   }, [profile]);
@@ -354,202 +322,13 @@ export default function App() {
     setTimeout(() => setShareToast(null), 3000);
   }, []);
 
-  // Fetch global leaderboard from backend (with offline cache fallback)
-  const fetchLeaderboard = useCallback(async () => {
-    try {
-      const res = await fetch('/api/leaderboard');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.entries)) {
-          setLeaderboard(data.entries);
-          localStorage.setItem(LOCAL_LEADERBOARD_CACHE_KEY, JSON.stringify(data.entries));
-        }
-      }
-    } catch {
-      // Offline mode uses cached leaderboard seamlessly
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchLeaderboard();
-  }, [fetchLeaderboard]);
-
-  const submitScoreToLeaderboard = useCallback(
-    async (scoreToSubmit: number, diff: DifficultyLevel, skinUsed: BirdSkinId) => {
-      if (scoreToSubmit < 1) return;
-      setIsSubmittingScore(true);
-      const stageReached = resolveStageFromScore(scoreToSubmit, 'auto').stageNum;
-      try {
-        const res = await fetch('/api/leaderboard', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            playerName: profileRef.current.playerName,
-            score: scoreToSubmit,
-            difficulty: diff,
-            skin: skinUsed,
-            stageReached,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.entries)) {
-            setLeaderboard(data.entries);
-            localStorage.setItem(LOCAL_LEADERBOARD_CACHE_KEY, JSON.stringify(data.entries));
-          }
-        }
-      } catch {
-        // Offline fallback: insert into local cache
-        setLeaderboard((prev) => {
-          const updated = [
-            ...prev.filter(
-              (e) =>
-                e.playerName.toLowerCase() !==
-                profileRef.current.playerName.toLowerCase()
-            ),
-            {
-              id: 'local-' + Date.now(),
-              playerName: profileRef.current.playerName,
-              score: scoreToSubmit,
-              difficulty: diff,
-              skin: skinUsed,
-              stageReached,
-              createdAt: new Date().toISOString(),
-            },
-          ]
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 25);
-          try {
-            localStorage.setItem(LOCAL_LEADERBOARD_CACHE_KEY, JSON.stringify(updated));
-          } catch {
-            // ignore
-          }
-          return updated;
-        });
-      } finally {
-        setIsSubmittingScore(false);
-      }
-    },
-    []
-  );
-
-  // Helper to award coins & unlock achievements
+  // Helper to award coins & persist in localStorage
   const addCoinsToWallet = useCallback((amount: number) => {
     if (amount <= 0) return;
-    const nextDaily: DailyChallengeState = {
-      ...dailyStateRef.current,
-      coins: dailyStateRef.current.coins + amount,
-    };
-    dailyStateRef.current = nextDaily;
-    saveDailyChallengeState(nextDaily);
-    setDailyState(nextDaily);
-  }, []);
-
-  const checkAndUnlockAchievements = useCallback(
-    (
-      runScore: number,
-      diff: DifficultyLevel,
-      prof: PlayerProfileState
-    ) => {
-      const unlocked = new Set(prof.unlockedAchievements);
-      const newlyUnlockedIds: string[] = [];
-
-      const tryUnlock = (id: string, condition: boolean) => {
-        if (condition && !unlocked.has(id)) {
-          unlocked.add(id);
-          newlyUnlockedIds.push(id);
-        }
-      };
-
-      tryUnlock('first_score_5', runScore >= 5);
-      tryUnlock('bronze_medal_10', runScore >= 10);
-      tryUnlock('silver_medal_20', runScore >= 20);
-      tryUnlock('gold_medal_30', runScore >= 30);
-      tryUnlock('coin_collector_25', prof.totalCoinsCollectedInFlight >= 25);
-      tryUnlock('powerup_master_5', prof.totalPowerUpsCollected >= 5);
-      tryUnlock('hard_mode_10', diff === 'hard' && runScore >= 10);
-      tryUnlock('skin_collector_3', prof.unlockedSkins.length >= 3);
-
-      if (newlyUnlockedIds.length > 0) {
-        let bonusCoins = 0;
-        const titles: string[] = [];
-        for (const id of newlyUnlockedIds) {
-          const def = ACHIEVEMENTS_LIST.find((a) => a.id === id);
-          if (def) {
-            bonusCoins += def.rewardCoins;
-            titles.push(languageRef.current === 'ar' ? def.titleAr : def.titleEn);
-          }
-        }
-        const nextProf: PlayerProfileState = {
-          ...prof,
-          unlockedAchievements: Array.from(unlocked),
-        };
-        profileRef.current = nextProf;
-        savePlayerProfile(nextProf);
-        setProfile(nextProf);
-
-        if (bonusCoins > 0) {
-          addCoinsToWallet(bonusCoins);
-        }
-        soundRef.current.playPowerUp();
-        showToastMessage(
-          languageRef.current === 'ar'
-            ? `إنجاز جديد: ${titles.join(' ، ')} (+${bonusCoins} عملة!)`
-            : `Achievement Unlocked: ${titles.join(', ')} (+${bonusCoins} Coins!)`
-        );
-      }
-    },
-    [addCoinsToWallet, showToastMessage]
-  );
-
-  // Record flap or score events into the Daily Challenge system
-  const handleDailyEvent = useCallback(
-    (eventType: 'flap' | 'score_point', currentRunScore: number, diff: DifficultyLevel) => {
-      const [updated, justCompleted] = recordDailyChallengeEvent(
-        dailyStateRef.current,
-        eventType,
-        currentRunScore,
-        diff
-      );
-      if (updated !== dailyStateRef.current) {
-        dailyStateRef.current = updated;
-        setDailyState(updated);
-      }
-      if (justCompleted) {
-        const tpl = getActiveChallengeTemplate(updated);
-        soundRef.current.playPowerUp();
-        soundRef.current.triggerHaptic([35, 30, 65]);
-        showToastMessage(
-          languageRef.current === 'ar'
-            ? `اكتمل تحدي اليوم! (${tpl.titleAr}) — استلم +${tpl.rewardCoins} عملة`
-            : `Daily Challenge Complete! (${tpl.titleEn}) — Claim +${tpl.rewardCoins} Coins`
-        );
-      }
-    },
-    [showToastMessage]
-  );
-
-  const handleClaimDailyReward = useCallback(() => {
-    const prev = dailyStateRef.current;
-    if (!prev.completed || prev.claimed) return;
-    const tpl = getActiveChallengeTemplate(prev);
-    const updated = claimDailyChallengeReward(prev);
-    dailyStateRef.current = updated;
-    setDailyState(updated);
-    soundRef.current.playPowerUp();
-    soundRef.current.triggerHaptic([40, 30, 80]);
-    showToastMessage(
-      languageRef.current === 'ar'
-        ? `تم استلام +${tpl.rewardCoins} عملة و${tpl.badgeNameAr}!`
-        : `Claimed +${tpl.rewardCoins} Coins & ${tpl.badgeNameEn}!`
-    );
-  }, [showToastMessage]);
-
-  const handleNextBonusChallenge = useCallback(() => {
-    soundRef.current.playClick();
-    const updated = activateNextBonusChallenge(dailyStateRef.current);
-    dailyStateRef.current = updated;
-    setDailyState(updated);
+    const nextCoins = coinsRef.current + amount;
+    coinsRef.current = nextCoins;
+    saveCoinsToStorage(nextCoins);
+    setCoins(nextCoins);
   }, []);
 
   const handleSelectOrBuyBird = (birdItem: (typeof SHOP_BIRDS)[number]) => {
@@ -560,24 +339,21 @@ export default function App() {
       return;
     }
 
-    if (dailyState.coins < birdItem.priceCoins) {
+    if (coins < birdItem.priceCoins) {
       soundRef.current.playHit();
       showToastMessage(
         language === 'ar'
-          ? `تحتاج إلى ${birdItem.priceCoins - dailyState.coins} عملة إضافية لشراء ${birdItem.nameAr}`
-          : `You need ${birdItem.priceCoins - dailyState.coins} more coins to unlock ${birdItem.nameEn}`
+          ? `تحتاج إلى ${birdItem.priceCoins - coins} عملة إضافية لشراء ${birdItem.nameAr}`
+          : `You need ${birdItem.priceCoins - coins} more coins to unlock ${birdItem.nameEn}`
       );
       return;
     }
 
-    // Deduct coins & unlock bird character
-    const nextDaily: DailyChallengeState = {
-      ...dailyStateRef.current,
-      coins: dailyStateRef.current.coins - birdItem.priceCoins,
-    };
-    dailyStateRef.current = nextDaily;
-    saveDailyChallengeState(nextDaily);
-    setDailyState(nextDaily);
+    // Deduct coins & unlock bird character in localStorage
+    const nextCoins = coinsRef.current - birdItem.priceCoins;
+    coinsRef.current = nextCoins;
+    saveCoinsToStorage(nextCoins);
+    setCoins(nextCoins);
 
     const nextProfile: PlayerProfileState = {
       ...profileRef.current,
@@ -591,34 +367,20 @@ export default function App() {
     soundRef.current.playPowerUp();
     showToastMessage(
       language === 'ar'
-        ? `تم شراء وفتح ${birdItem.nameAr} بنجاح!`
+        ? `تم شراء وتفعيل ${birdItem.nameAr} بنجاح!`
         : `Unlocked and equipped ${birdItem.nameEn}!`
     );
-    checkAndUnlockAchievements(gameRef.current.score, difficulty, nextProfile);
-  };
-
-  const handleCyclePilotName = () => {
-    soundRef.current.playClick();
-    const currentIdx = PILOT_CALLSIGNS.indexOf(profile.playerName);
-    const nextName =
-      PILOT_CALLSIGNS[(currentIdx + 1) % PILOT_CALLSIGNS.length] ||
-      'Falcon-' + Math.floor(10 + Math.random() * 89);
-    const nextProf = { ...profileRef.current, playerName: nextName };
-    profileRef.current = nextProf;
-    savePlayerProfile(nextProf);
-    setProfile(nextProf);
   };
 
   // Persist user settings to localStorage and sync with sound engine
   useEffect(() => {
     soundRef.current.sfxEnabled = sfxEnabled;
     soundRef.current.hapticsEnabled = hapticsEnabled;
-    soundRef.current.syncMusicState(musicEnabled && !isPaused);
+    soundRef.current.stopMusicLoop();
 
     try {
       const toSave: SavedSettings = {
         sfxEnabled,
-        musicEnabled,
         hapticsEnabled,
         difficulty,
         skin: selectedSkin,
@@ -629,26 +391,19 @@ export default function App() {
     } catch {
       // ignore
     }
-  }, [sfxEnabled, musicEnabled, hapticsEnabled, difficulty, selectedSkin, stageMode, language, isPaused]);
+  }, [sfxEnabled, hapticsEnabled, difficulty, selectedSkin, stageMode, language]);
 
   // Mobile Lifecycle & Visibility Handling:
-  // Automatically pause gameplay & stop audio when app goes to background or loses visibility
+  // Automatically pause gameplay when app goes to background or loses visibility
   useEffect(() => {
     const handleVisibilityOrBlur = () => {
       if (document.visibilityState === 'hidden') {
-        soundRef.current.stopMusicLoop();
         if (
           gameRef.current.state === 'PLAYING' ||
           gameRef.current.state === 'GET_READY'
         ) {
           setIsPaused(true);
         }
-      } else if (
-        document.visibilityState === 'visible' &&
-        musicEnabled &&
-        !runtimeConfigRef.current.isPaused
-      ) {
-        soundRef.current.startMusicLoop();
       }
     };
 
@@ -657,9 +412,8 @@ export default function App() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityOrBlur);
       window.removeEventListener('blur', handleVisibilityOrBlur);
-      soundRef.current.stopMusicLoop();
     };
-  }, [musicEnabled]);
+  }, []);
 
   // Mutable ref mirrors for the 60FPS loop
   const runtimeConfigRef = useRef({
@@ -778,9 +532,6 @@ export default function App() {
     const g = gameRef.current;
     soundRef.current.playClick();
     soundRef.current.playSwoosh();
-    if (musicEnabled) {
-      soundRef.current.startMusicLoop();
-    }
     setActiveModal('none');
     setIsPaused(false);
     g.state = 'GET_READY';
@@ -804,7 +555,7 @@ export default function App() {
     g.bird.rotation = 0;
     g.bird.flapHoldFrames = 0;
     syncTelemetryImmediate();
-  }, [musicEnabled, syncTelemetryImmediate]);
+  }, [syncTelemetryImmediate]);
 
   const goToMainMenu = useCallback(() => {
     const g = gameRef.current;
@@ -850,8 +601,6 @@ export default function App() {
       sound.playFlap();
       sound.triggerHaptic(12);
       spawnParticles(g.bird.x - 10, g.bird.y + 4, 6, ['#ffffff', '#fef08a', '#bae6fd'], 0.85);
-      if (musicEnabled) sound.startMusicLoop();
-      handleDailyEvent('flap', g.score, cfg.difficulty);
       syncTelemetryImmediate();
     } else if (g.state === 'PLAYING') {
       g.bird.vy = FLAP_VELOCITY;
@@ -860,9 +609,8 @@ export default function App() {
       sound.playFlap();
       sound.triggerHaptic(12);
       spawnParticles(g.bird.x - 10, g.bird.y + 4, 5, ['#ffffff', '#fef08a', '#bae6fd'], 0.8);
-      handleDailyEvent('flap', g.score, cfg.difficulty);
     }
-  }, [musicEnabled, handleDailyEvent, spawnParticles, syncTelemetryImmediate]);
+  }, [spawnParticles, syncTelemetryImmediate]);
 
   const handleTogglePause = useCallback(() => {
     const g = gameRef.current;
@@ -979,7 +727,6 @@ export default function App() {
 
     const enterGameOverState = () => {
       const g = gameRef.current;
-      const cfg = runtimeConfigRef.current;
       g.state = 'GAME_OVER';
       g.boardY = 520;
       g.displayScore = 0;
@@ -995,7 +742,6 @@ export default function App() {
         }
       }
 
-      // Update games played & check achievements
       const nextProf: PlayerProfileState = {
         ...profileRef.current,
         totalGamesPlayed: profileRef.current.totalGamesPlayed + 1,
@@ -1003,11 +749,6 @@ export default function App() {
       profileRef.current = nextProf;
       savePlayerProfile(nextProf);
       setProfile(nextProf);
-
-      checkAndUnlockAchievements(g.score, cfg.difficulty, nextProf);
-      if (g.score > 0) {
-        submitScoreToLeaderboard(g.score, cfg.difficulty, cfg.skin);
-      }
 
       soundRef.current.playSwoosh();
       syncTelemetryImmediate();
@@ -1243,8 +984,6 @@ export default function App() {
             soundRef.current.triggerHaptic(18);
             spawnParticles(g.bird.x, g.bird.y - 12, 7, ['#85f293', '#ffffff', '#f8e71c'], 1.0);
             spawnPopup(g.bird.x, g.bird.y - 16, '+1', '#ffffff');
-            handleDailyEvent('score_point', g.score, cfg.difficulty);
-            checkAndUnlockAchievements(g.score, cfg.difficulty, profileRef.current);
           }
 
           if (hbRight > p.x && hbLeft < p.x + PIPE_WIDTH) {
@@ -1558,11 +1297,8 @@ export default function App() {
     return () => cancelAnimationFrame(rafId);
   }, [
     addCoinsToWallet,
-    checkAndUnlockAchievements,
-    handleDailyEvent,
     spawnParticles,
     spawnPopup,
-    submitScoreToLeaderboard,
     syncTelemetryImmediate,
   ]);
 
@@ -1579,11 +1315,6 @@ export default function App() {
 
   const activeSkinMeta = BIRD_SKINS.find((s) => s.id === selectedSkin) || BIRD_SKINS[0];
   const activeDiffMeta = DIFFICULTY_CONFIGS[difficulty];
-  const activeChallenge = getActiveChallengeTemplate(dailyState);
-  const challengeProgressPercent = Math.min(
-    100,
-    Math.round((dailyState.progress / activeChallenge.target) * 100)
-  );
 
   const isAr = language === 'ar';
   const dirAttr = isAr ? 'rtl' : 'ltr';
@@ -1674,177 +1405,44 @@ export default function App() {
               )}
 
             {/* ===================================================================
-                1. MAIN MENU OVERLAY (شاشة البداية الجذابة + المهام اليومية)
+                1. START SCREEN OVERLAY (شاشة البداية النظيفة + زر المتجر المصغّر)
                =================================================================== */}
             {telemetry.state === 'MAIN_MENU' && activeModal === 'none' && (
               <div
                 dir={dirAttr}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="absolute inset-0 z-20 flex flex-col justify-between p-4 sm:p-5 bg-gradient-to-b from-slate-950/65 via-slate-950/20 to-slate-950/92"
+                className="absolute inset-0 z-20 flex flex-col justify-between p-4 sm:p-5 bg-gradient-to-b from-slate-950/60 via-transparent to-slate-950/85"
               >
-                {/* Top Bar inside Main Menu: Best Score, Coins, Achievements */}
-                <div className="flex items-center justify-between text-xs font-semibold text-white bg-slate-950/70 backdrop-blur-md px-3.5 py-2.5 rounded-2xl border border-white/15 font-mono tabular-nums">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('leaderboard');
-                    }}
-                    className="hover:text-amber-300 transition-colors cursor-pointer"
-                  >
-                    {isAr ? `الأفضل: ${telemetry.bestScore}` : `Best: ${telemetry.bestScore}`}
-                  </button>
-                  <span aria-hidden="true">·</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('skins');
-                    }}
-                    className="text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
-                  >
-                    {isAr ? `العملات: ${dailyState.coins}` : `Coins: ${dailyState.coins}`}
-                  </button>
-                  <span aria-hidden="true">·</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('achievements');
-                    }}
-                    className="text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer"
-                  >
-                    {isAr
-                      ? `الإنجازات: ${profile.unlockedAchievements.length}/${ACHIEVEMENTS_LIST.length}`
-                      : `Awards: ${profile.unlockedAchievements.length}/${ACHIEVEMENTS_LIST.length}`}
-                  </button>
-                </div>
-
-                {/* Center Title Lockup */}
-                <div className="text-center mt-1">
-                  <h2 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_3px_0_rgba(0,0,0,0.85)]">
-                    FLAPPY WING
-                  </h2>
-                  <p className="text-xs text-slate-200 mt-0.5 drop-shadow">
-                    {isAr
-                      ? `${activeSkinMeta.nameAr} · المستوى: ${activeDiffMeta.labelAr}`
-                      : `${activeSkinMeta.nameEn} · Mode: ${activeDiffMeta.labelEn}`}
-                  </p>
-                </div>
-
-                {/* Daily Challenge Widget */}
-                <div className="bg-slate-900/90 backdrop-blur-md border border-white/15 rounded-2xl p-3 shadow-xl flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                      <Target className="w-3.5 h-3.5 shrink-0" />
-                      <span>{isAr ? 'تحدي اليوم' : 'Daily Challenge'}</span>
-                    </div>
-                    <span className="text-[11px] font-mono tabular-nums text-emerald-300 font-semibold">
-                      +{activeChallenge.rewardCoins} {isAr ? 'عملة' : 'Coins'}
+                {/* Top Bar inside Start Screen: Coins, Best Score, and Compact Shop & Settings Buttons */}
+                <div className="flex items-center justify-between gap-2">
+                  {/* Coins & Best Score Pill */}
+                  <div className="flex items-center gap-3 px-3.5 py-2 rounded-2xl bg-slate-950/75 backdrop-blur-md border border-white/15 text-xs font-bold font-mono tabular-nums text-white shadow-lg">
+                    <span className="flex items-center gap-1.5 text-amber-300">
+                      <Coins className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>{coins}</span>
                     </span>
-                  </div>
-
-                  <div className="text-xs font-semibold text-slate-100 leading-snug">
-                    {isAr ? activeChallenge.titleAr : activeChallenge.titleEn}
-                  </div>
-
-                  <div className="flex items-center gap-2.5 mt-0.5">
-                    <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full bg-amber-400 transition-transform duration-150 ${
-                          isAr ? 'origin-right' : 'origin-left'
-                        }`}
-                        style={{
-                          transform: `scaleX(${challengeProgressPercent / 100})`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs font-mono tabular-nums font-bold text-slate-200 shrink-0">
-                      {dailyState.progress}/{activeChallenge.target}
-                    </span>
-                  </div>
-
-                  {dailyState.completed && !dailyState.claimed && (
-                    <button
-                      type="button"
-                      onClick={handleClaimDailyReward}
-                      className="mt-1 w-full min-h-[40px] rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] transition-transform cursor-pointer"
-                    >
-                      <Award className="w-4 h-4" />
+                    <span className="text-slate-600" aria-hidden="true">|</span>
+                    <span className="flex items-center gap-1 text-emerald-300">
+                      <Trophy className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       <span>
-                        {isAr
-                          ? `استلام المكافأة (+${activeChallenge.rewardCoins} عملة)`
-                          : `Claim Reward (+${activeChallenge.rewardCoins} Coins)`}
+                        {isAr ? `الأفضل: ${telemetry.bestScore}` : `Best: ${telemetry.bestScore}`}
                       </span>
-                    </button>
-                  )}
+                    </span>
+                  </div>
 
-                  {dailyState.claimed && (
-                    <div className="mt-0.5 flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
-                      <span className="text-[11px] text-emerald-400 font-semibold">
-                        {isAr ? 'تم إنجاز التحدي واستلام الوسام' : 'Challenge Complete & Claimed'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleNextBonusChallenge}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 hover:text-amber-200 cursor-pointer"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        <span>{isAr ? 'تحدي إضافي' : 'Next Goal'}</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Thumb-Zone Navigation & Action Buttons */}
-                <div className="flex flex-col gap-2 w-full">
-                  {/* Prominent PLAY Button */}
-                  <button
-                    type="button"
-                    onClick={startNewGameSession}
-                    className="w-full min-h-[52px] rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-base flex items-center justify-center gap-2.5 shadow-lg shadow-amber-950/40 active:scale-[0.98] transition-transform cursor-pointer"
-                  >
-                    <Play className="w-5 h-5 fill-slate-950" />
-                    <span>{isAr ? 'ابدأ اللعب' : 'PLAY GAME'}</span>
-                  </button>
-
-                  {/* 4-Button Grid for Shop/Skins, Achievements, Leaderboard, Settings */}
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Compact Shop Button & Settings Button inside Start Screen */}
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
                         soundRef.current.playClick();
                         setActiveModal('skins');
                       }}
-                      className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
+                      title={isAr ? 'متجر الطيور' : 'Bird Shop'}
+                      className="min-h-[40px] px-3 rounded-2xl bg-slate-950/75 hover:bg-slate-900 backdrop-blur-md border border-amber-400/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition-transform cursor-pointer"
                     >
-                      <Palette className="w-4 h-4 text-amber-400" />
-                      <span>{isAr ? 'متجر الطيور' : 'Bird Shop'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        setActiveModal('achievements');
-                      }}
-                      className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
-                    >
-                      <Trophy className="w-4 h-4 text-emerald-400" />
-                      <span>{isAr ? 'الإنجازات' : 'Achievements'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        fetchLeaderboard();
-                        setActiveModal('leaderboard');
-                      }}
-                      className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
-                    >
-                      <Globe className="w-4 h-4 text-purple-400" />
-                      <span>{isAr ? 'الترتيب والأفضل' : 'Leaderboard'}</span>
+                      <Palette className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>{isAr ? 'المتجر' : 'Shop'}</span>
                     </button>
 
                     <button
@@ -1853,12 +1451,37 @@ export default function App() {
                         soundRef.current.playClick();
                         setActiveModal('settings');
                       }}
-                      className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
+                      aria-label={isAr ? 'الإعدادات' : 'Settings'}
+                      title={isAr ? 'الإعدادات' : 'Settings'}
+                      className="w-10 h-10 rounded-2xl bg-slate-950/75 hover:bg-slate-900 backdrop-blur-md border border-white/15 text-slate-200 flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
                     >
                       <Settings className="w-4 h-4 text-sky-400" />
-                      <span>{isAr ? 'الإعدادات' : 'Settings'}</span>
                     </button>
                   </div>
+                </div>
+
+                {/* Center Title Lockup (above the animated bird on canvas) */}
+                <div className="text-center -mt-20 pointer-events-none">
+                  <h1 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_3px_0_rgba(0,0,0,0.85)]">
+                    FLAPPY WING
+                  </h1>
+                  <p className="text-xs text-slate-200 mt-1 drop-shadow">
+                    {isAr
+                      ? `${activeSkinMeta.nameAr} · المستوى: ${activeDiffMeta.labelAr}`
+                      : `${activeSkinMeta.nameEn} · Mode: ${activeDiffMeta.labelEn}`}
+                  </p>
+                </div>
+
+                {/* Bottom Thumb-Zone PLAY Button */}
+                <div className="flex flex-col gap-2 w-full">
+                  <button
+                    type="button"
+                    onClick={startNewGameSession}
+                    className="w-full min-h-[54px] rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-base flex items-center justify-center gap-2.5 shadow-lg shadow-amber-950/40 active:scale-[0.98] transition-transform cursor-pointer"
+                  >
+                    <Play className="w-5 h-5 fill-slate-950" />
+                    <span>{isAr ? 'ابدأ اللعب · PLAY' : 'PLAY GAME'}</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -1944,8 +1567,8 @@ export default function App() {
                   </h2>
                   <p className="text-xs text-slate-300 mt-0.5">
                     {isAr
-                      ? `${stageLabel} · رصيد العملات: ${dailyState.coins}`
-                      : `${stageLabel} · Coins: ${dailyState.coins}`}
+                      ? `${stageLabel} · رصيد العملات: ${coins}`
+                      : `${stageLabel} · Coins: ${coins}`}
                   </p>
                 </div>
 
@@ -2002,36 +1625,6 @@ export default function App() {
                       )}
                     </div>
                   </div>
-
-                  {/* Daily Challenge Quick Status inside Game Over */}
-                  <div className="pt-2 border-t border-[#c4ba70] flex items-center justify-between text-xs">
-                    <span className="font-bold text-[#543847] truncate">
-                      {isAr
-                        ? `تحدي اليوم: ${dailyState.progress}/${activeChallenge.target}`
-                        : `Daily Goal: ${dailyState.progress}/${activeChallenge.target}`}
-                    </span>
-                    {dailyState.completed && !dailyState.claimed ? (
-                      <button
-                        type="button"
-                        onClick={handleClaimDailyReward}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px] cursor-pointer"
-                      >
-                        {isAr
-                          ? `استلام +${activeChallenge.rewardCoins} عملة`
-                          : `Claim +${activeChallenge.rewardCoins}`}
-                      </button>
-                    ) : (
-                      <span className="text-[11px] font-semibold text-[#7a591b] truncate max-w-[160px]">
-                        {dailyState.claimed
-                          ? isAr
-                            ? 'مكتمل ومُستلم'
-                            : 'Claimed ✓'
-                          : isAr
-                          ? activeChallenge.titleAr
-                          : activeChallenge.titleEn}
-                      </span>
-                    )}
-                  </div>
                 </div>
 
                 {/* Bottom Thumb-Zone Action Buttons */}
@@ -2081,7 +1674,7 @@ export default function App() {
             )}
 
             {/* ===================================================================
-                4. SETTINGS MODAL (شاشة الإعدادات واللغة والمراحل والصعوبة)
+                4. SETTINGS MODAL (شاشة الإعدادات واللغة والمراحل والصعوبة - بدون خيار الموسيقى)
                =================================================================== */}
             {activeModal === 'settings' && (
               <div
@@ -2108,9 +1701,9 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="flex flex-col gap-1.5 my-1.5">
+                <div className="flex flex-col gap-2 my-2">
                   {/* Language Selection: Arabic / English */}
-                  <div className="p-2.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2">
+                  <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
                       <span className="text-xs font-bold text-slate-100">
@@ -2124,7 +1717,7 @@ export default function App() {
                           soundRef.current.playClick();
                           setLanguage('ar');
                         }}
-                        className={`min-h-[34px] rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                        className={`min-h-[36px] rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                           language === 'ar'
                             ? 'bg-emerald-400 text-slate-950 border-emerald-300'
                             : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
@@ -2138,7 +1731,7 @@ export default function App() {
                           soundRef.current.playClick();
                           setLanguage('en');
                         }}
-                        className={`min-h-[34px] rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                        className={`min-h-[36px] rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                           language === 'en'
                             ? 'bg-emerald-400 text-slate-950 border-emerald-300'
                             : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
@@ -2156,7 +1749,7 @@ export default function App() {
                       setSfxEnabled(next);
                       if (next) soundRef.current.playScore();
                     }}
-                    className="w-full min-h-[44px] px-3 py-1.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
+                    className="w-full min-h-[48px] px-3 py-2 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 text-start">
                       <Volume2 className="w-4 h-4 text-amber-400 shrink-0" />
@@ -2183,43 +1776,13 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      soundRef.current.playClick();
-                      setMusicEnabled((v) => !v);
-                    }}
-                    className="w-full min-h-[44px] px-3 py-1.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5 text-start">
-                      <Music className="w-4 h-4 text-sky-400 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold text-slate-100">
-                          {isAr ? 'موسيقى الخلفية' : '8-Bit Background Music'}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          {isAr ? 'ألحان أركيد تفاعلية أثناء اللعب' : 'Retro chiptune melody loop'}
-                        </div>
-                      </div>
-                    </div>
-                    <span
-                      className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
-                        musicEnabled
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                          : 'bg-slate-800 text-slate-400'
-                      }`}
-                    >
-                      {musicEnabled ? (isAr ? 'مفعّل' : 'ON') : isAr ? 'مغلق' : 'OFF'}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
                       const next = !hapticsEnabled;
                       setHapticsEnabled(next);
                       soundRef.current.hapticsEnabled = next;
                       if (next) soundRef.current.triggerHaptic(50);
                       soundRef.current.playClick();
                     }}
-                    className="w-full min-h-[44px] px-3 py-1.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
+                    className="w-full min-h-[48px] px-3 py-2 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 text-start">
                       <Vibrate className="w-4 h-4 text-purple-400 shrink-0" />
@@ -2244,7 +1807,7 @@ export default function App() {
                   </button>
 
                   {/* Difficulty Selection */}
-                  <div className="p-2.5 rounded-2xl bg-slate-900 border border-slate-800">
+                  <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800">
                     <div className="text-xs font-bold text-slate-200 mb-1.5">
                       {isAr ? 'مستوى الصعوبة' : 'Difficulty Level'}
                     </div>
@@ -2260,7 +1823,7 @@ export default function App() {
                               soundRef.current.playClick();
                               setDifficulty(lvl);
                             }}
-                            className={`min-h-[36px] py-1 px-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                            className={`min-h-[38px] py-1 px-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                               active
                                 ? 'bg-amber-400 text-slate-950 border-amber-300'
                                 : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
@@ -2274,7 +1837,7 @@ export default function App() {
                   </div>
 
                   {/* Stage / Biome Progression Selection */}
-                  <div className="p-2.5 rounded-2xl bg-slate-900 border border-slate-800">
+                  <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800">
                     <div className="text-xs font-bold text-slate-200 mb-1.5">
                       {isAr ? 'نظام المراحل والخلفيات' : 'Stages & Biomes'}
                     </div>
@@ -2295,7 +1858,7 @@ export default function App() {
                             soundRef.current.playClick();
                             setStageMode(st.id);
                           }}
-                          className={`min-h-[34px] rounded-lg text-[11px] font-bold border cursor-pointer ${
+                          className={`min-h-[36px] rounded-lg text-[11px] font-bold border cursor-pointer ${
                             stageMode === st.id
                               ? 'bg-sky-400 text-slate-950 border-sky-300'
                               : 'bg-slate-800 text-slate-300 border-slate-700'
@@ -2322,347 +1885,108 @@ export default function App() {
             )}
 
             {/* ===================================================================
-                5. CHARACTER SHOP & SKINS MODAL (متجر شراء الشخصيات بالعملات)
+                5. CHARACTER SHOP & SKINS POPUP MODAL (نافذة المتجر المنبثقة وتغلق بزر X)
                =================================================================== */}
             {activeModal === 'skins' && (
               <div
                 dir={dirAttr}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
+                className="absolute inset-0 z-40 flex items-center justify-center p-3.5 bg-slate-950/85 backdrop-blur-md"
               >
-                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                  <div>
-                    <h3 className="text-base font-bold text-white">
-                      {isAr ? 'متجر الطيور' : 'Character Shop'}
-                    </h3>
-                    <p className="text-xs text-amber-300 font-mono">
-                      {isAr
-                        ? `رصيدك الحالي: ${dailyState.coins} عملة`
-                        : `Your Balance: ${dailyState.coins} Coins`}
-                    </p>
+                <div className="w-full max-h-full bg-slate-900 border border-slate-700/90 rounded-3xl p-4 shadow-2xl flex flex-col justify-between overflow-hidden">
+                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+                    <div>
+                      <h3 className="text-base font-bold text-white">
+                        {isAr ? 'متجر الطيور' : 'Character Shop'}
+                      </h3>
+                      <p className="text-xs text-amber-300 font-mono flex items-center gap-1 mt-0.5">
+                        <Coins className="w-3.5 h-3.5 text-amber-400" />
+                        <span>
+                          {isAr
+                            ? `رصيدك الحالي: ${coins} عملة`
+                            : `Balance: ${coins} Coins`}
+                        </span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        soundRef.current.playClick();
+                        setActiveModal('none');
+                      }}
+                      aria-label={isAr ? 'إغلاق المتجر' : 'Close Shop'}
+                      className="min-w-[38px] min-h-[38px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('none');
-                    }}
-                    className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
 
-                <div className="flex flex-col gap-2 my-2.5 overflow-y-auto pr-0.5">
-                  {SHOP_BIRDS.map((item) => {
-                    const isUnlocked = profile.unlockedSkins.includes(item.id);
-                    const isSelected = selectedSkin === item.id;
-                    const canAfford = dailyState.coins >= item.priceCoins;
+                  <div className="flex flex-col gap-2 my-2.5 overflow-y-auto pr-0.5 max-h-[360px]">
+                    {SHOP_BIRDS.map((item) => {
+                      const isUnlocked = profile.unlockedSkins.includes(item.id);
+                      const isSelected = selectedSkin === item.id;
+                      const canAfford = coins >= item.priceCoins;
 
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleSelectOrBuyBird(item)}
-                        className={`w-full min-h-[54px] px-3 py-2 rounded-2xl border flex items-center justify-between transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'bg-amber-400/15 border-amber-400 text-white'
-                            : isUnlocked
-                            ? 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800/70'
-                            : 'bg-slate-900/60 border-slate-800/80 text-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-11 h-9 rounded-xl bg-[#70c5ce] border border-slate-700 flex items-center justify-center shrink-0">
-                            {skinPreviews[item.id] && (
-                              <img
-                                src={skinPreviews[item.id]}
-                                alt={item.nameEn}
-                                referrerPolicy="no-referrer"
-                                className="pixelated-canvas w-8 h-6"
-                              />
-                            )}
-                          </div>
-                          <div className="text-start">
-                            <div className="text-xs font-bold text-slate-100">
-                              {isAr ? item.nameAr : item.nameEn}
-                            </div>
-                            <div className="text-[10px] text-slate-400">
-                              {isAr ? item.descAr : item.descEn}
-                            </div>
-                          </div>
-                        </div>
-
-                        {isSelected ? (
-                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 shrink-0">
-                            {isAr ? 'مُجهّز' : 'Equipped'}
-                          </span>
-                        ) : isUnlocked ? (
-                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-emerald-300 shrink-0">
-                            {isAr ? 'اختيار' : 'Select'}
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shrink-0 ${
-                              canAfford
-                                ? 'bg-emerald-400 text-slate-950'
-                                : 'bg-slate-800 text-amber-300'
-                            }`}
-                          >
-                            <Lock className="w-3 h-3" />
-                            <span>
-                              {item.priceCoins} {isAr ? 'عملة' : 'Coins'}
-                            </span>
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundRef.current.playClick();
-                    setActiveModal('none');
-                  }}
-                  className="w-full min-h-[44px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm cursor-pointer"
-                >
-                  {isAr ? 'العودة للقائمة' : 'Back to Menu'}
-                </button>
-              </div>
-            )}
-
-            {/* ===================================================================
-                6. ACHIEVEMENTS MODAL (شاشة الإنجازات والمكافآت)
-               =================================================================== */}
-            {activeModal === 'achievements' && (
-              <div
-                dir={dirAttr}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
-              >
-                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                  <div>
-                    <h3 className="text-base font-bold text-white">
-                      {isAr ? 'الإنجازات والمكافآت' : 'Achievements & Rewards'}
-                    </h3>
-                    <p className="text-xs text-emerald-300 font-mono">
-                      {isAr
-                        ? `مكتمل: ${profile.unlockedAchievements.length} من ${ACHIEVEMENTS_LIST.length}`
-                        : `Unlocked: ${profile.unlockedAchievements.length} / ${ACHIEVEMENTS_LIST.length}`}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('none');
-                    }}
-                    className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-2 my-2.5 overflow-y-auto pr-0.5">
-                  {ACHIEVEMENTS_LIST.map((ach) => {
-                    const unlocked = profile.unlockedAchievements.includes(ach.id);
-                    return (
-                      <div
-                        key={ach.id}
-                        className={`p-3 rounded-2xl border flex items-center justify-between gap-2 ${
-                          unlocked
-                            ? 'bg-emerald-500/15 border-emerald-500/40 text-white'
-                            : 'bg-slate-900/70 border-slate-800 text-slate-400'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 text-start">
-                          <div
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                              unlocked
-                                ? 'bg-emerald-400 text-slate-950'
-                                : 'bg-slate-800 text-slate-500'
-                            }`}
-                          >
-                            <Trophy className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-100">
-                              {isAr ? ach.titleAr : ach.titleEn}
-                            </div>
-                            <div className="text-[10px] text-slate-400">
-                              {isAr ? ach.descAr : ach.descEn}
-                            </div>
-                          </div>
-                        </div>
-
-                        <span
-                          className={`text-[11px] font-mono font-bold px-2 py-1 rounded-lg shrink-0 ${
-                            unlocked
-                              ? 'bg-emerald-400/20 text-emerald-300'
-                              : 'bg-slate-800 text-amber-300'
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelectOrBuyBird(item)}
+                          className={`w-full min-h-[54px] px-3 py-2 rounded-2xl border flex items-center justify-between transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-400/15 border-amber-400 text-white'
+                              : isUnlocked
+                              ? 'bg-slate-950/70 border-slate-800 text-slate-200 hover:bg-slate-800/70'
+                              : 'bg-slate-950/40 border-slate-800/80 text-slate-300'
                           }`}
                         >
-                          {unlocked
-                            ? isAr
-                              ? 'مكتمل ✓'
-                              : 'Done ✓'
-                            : `+${ach.rewardCoins} ${isAr ? 'عملة' : 'Coins'}`}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-9 rounded-xl bg-[#70c5ce] border border-slate-700 flex items-center justify-center shrink-0">
+                              {skinPreviews[item.id] && (
+                                <img
+                                  src={skinPreviews[item.id]}
+                                  alt={item.nameEn}
+                                  referrerPolicy="no-referrer"
+                                  className="pixelated-canvas w-8 h-6"
+                                />
+                              )}
+                            </div>
+                            <div className="text-start">
+                              <div className="text-xs font-bold text-slate-100">
+                                {isAr ? item.nameAr : item.nameEn}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                {isAr ? item.descAr : item.descEn}
+                              </div>
+                            </div>
+                          </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundRef.current.playClick();
-                    setActiveModal('none');
-                  }}
-                  className="w-full min-h-[44px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm cursor-pointer"
-                >
-                  {isAr ? 'العودة' : 'Back'}
-                </button>
-              </div>
-            )}
-
-            {/* ===================================================================
-                7. BEST SCORE & GLOBAL LEADERBOARD MODAL (شاشة أفضل نتيجة والترتيب العالمي)
-               =================================================================== */}
-            {activeModal === 'leaderboard' && (
-              <div
-                dir={dirAttr}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
-              >
-                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                  <div>
-                    <h3 className="text-base font-bold text-white">
-                      {isAr ? 'أفضل نتيجة ولوحة الترتيب' : 'Best Score & Leaderboard'}
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      {isAr ? 'أفضل نتيجة لك:' : 'Your Best:'}{' '}
-                      <strong className="text-amber-300">{telemetry.bestScore}</strong> ·{' '}
-                      {isAr ? 'لقبك:' : 'Callsign:'}{' '}
-                      <button
-                        type="button"
-                        onClick={handleCyclePilotName}
-                        className="text-sky-300 underline cursor-pointer"
-                      >
-                        {profile.playerName} ({isAr ? 'تغيير' : 'Change'})
-                      </button>
-                    </p>
+                          {isSelected ? (
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 shrink-0">
+                              {isAr ? 'مُجهّز' : 'Equipped'}
+                            </span>
+                          ) : isUnlocked ? (
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-emerald-300 shrink-0">
+                              {isAr ? 'اختيار' : 'Select'}
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shrink-0 ${
+                                canAfford
+                                  ? 'bg-emerald-400 text-slate-950'
+                                  : 'bg-slate-800 text-amber-300'
+                              }`}
+                            >
+                              <Lock className="w-3 h-3" />
+                              <span>
+                                {item.priceCoins} {isAr ? 'عملة' : 'Coins'}
+                              </span>
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('none');
-                    }}
-                    className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-1.5 my-2.5 overflow-y-auto pr-0.5 font-mono tabular-nums">
-                  {leaderboard.slice(0, 8).map((entry, idx) => (
-                    <div
-                      key={entry.id}
-                      className={`px-3 py-2 rounded-xl border flex items-center justify-between text-xs ${
-                        idx === 0
-                          ? 'bg-amber-400/15 border-amber-400/50 text-amber-200'
-                          : 'bg-slate-900 border-slate-800 text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 text-center font-bold text-slate-400">
-                          #{idx + 1}
-                        </span>
-                        <span className="font-bold">{entry.playerName}</span>
-                        <span className="text-[10px] text-slate-400">
-                          {isAr ? `المرحلة ${entry.stageReached}` : `Stage ${entry.stageReached}`}
-                        </span>
-                      </div>
-                      <span className="font-extrabold text-sm text-emerald-400">
-                        {entry.score}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={isSubmittingScore || telemetry.bestScore < 1}
-                    onClick={() =>
-                      submitScoreToLeaderboard(
-                        telemetry.bestScore,
-                        difficulty,
-                        selectedSkin
-                      )
-                    }
-                    className="flex-1 min-h-[44px] rounded-xl bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 text-slate-950 font-bold text-xs cursor-pointer"
-                  >
-                    {isSubmittingScore
-                      ? isAr
-                        ? 'جاري التحديث...'
-                        : 'Submitting...'
-                      : isAr
-                      ? 'رفع أفضل نتيجة للترتيب'
-                      : 'Submit Best Score'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('none');
-                    }}
-                    className="px-4 min-h-[44px] rounded-xl bg-slate-800 text-slate-200 font-bold text-xs cursor-pointer"
-                  >
-                    {isAr ? 'إغلاق' : 'Close'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ===================================================================
-                8. iOS SAFARI INSTALL GUIDE MODAL
-               =================================================================== */}
-            {activeModal === 'ios_install' && (
-              <div
-                dir={dirAttr}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="absolute inset-0 z-40 flex items-center justify-center p-5 bg-slate-950/90 backdrop-blur-md"
-              >
-                <div className="w-full bg-slate-900 border border-slate-700 rounded-3xl p-5 text-start flex flex-col gap-3">
-                  <h3 className="text-base font-bold text-white">
-                    {isAr ? 'تثبيت اللعبة على iPhone / iPad' : 'Install on iPhone / iPad'}
-                  </h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    {isAr ? (
-                      <>
-                        1. اضغط على زر <strong>المشاركة (Share)</strong> في شريط متصفح Safari.
-                        <br />
-                        2. اختر <strong>الإضافة إلى الشاشة الرئيسية (Add to Home Screen)</strong> لتعمل اللعبة بملء الشاشة.
-                      </>
-                    ) : (
-                      <>
-                        1. Tap the <strong>Share</strong> button in Safari.
-                        <br />
-                        2. Select <strong>Add to Home Screen</strong> to play in fullscreen.
-                      </>
-                    )}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveModal('none')}
-                    className="w-full min-h-[44px] rounded-xl bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer"
-                  >
-                    {isAr ? 'حسناً، فهمت' : 'Got It'}
-                  </button>
                 </div>
               </div>
             )}
