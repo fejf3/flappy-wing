@@ -1,17 +1,26 @@
 @import "tailwindcss";
 
 @layer base {
-  html, body {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     overscroll-behavior: none;
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
     -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+    touch-action: none;
   }
 
-  code, pre, .font-mono {
+  code,
+  pre,
+  .font-mono {
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
@@ -24,6 +33,11 @@
   image-rendering: crisp-edges;
 }
 
+.touch-scroll-y {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
 }
@@ -31,5 +45,6 @@
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
 
 
