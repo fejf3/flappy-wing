@@ -10,6 +10,7 @@ export interface ShopBirdItem {
   nameAr: string;
   nameEn: string;
   descAr: string;
+  descEn: string;
   badgeText: string;
   priceCoins: number; // 0 = unlocked by default
 }
@@ -20,6 +21,7 @@ export const SHOP_BIRDS: ShopBirdItem[] = [
     nameAr: 'الكلاسيكي الأصفر',
     nameEn: 'Classic Wing',
     descAr: 'الطائر الأصلي المتوازن لعام 2013',
+    descEn: 'The original balanced 2013 classic bird',
     badgeText: 'مجاني · Default',
     priceCoins: 0,
   },
@@ -28,6 +30,7 @@ export const SHOP_BIRDS: ShopBirdItem[] = [
     nameAr: 'الصقر القرمزي',
     nameEn: 'Crimson Falcon',
     descAr: 'ريش قرمزي ناري مع منقار ذهبي',
+    descEn: 'Fiery crimson feathers with a golden beak',
     badgeText: '100 عملة',
     priceCoins: 100,
   },
@@ -36,6 +39,7 @@ export const SHOP_BIRDS: ShopBirdItem[] = [
     nameAr: 'طائر السماء الجليدي',
     nameEn: 'Azure Sky',
     descAr: 'ألوان سماوية متألقة في المراحل الليلية',
+    descEn: 'Radiant sky-blue plumage built for night stages',
     badgeText: '180 عملة',
     priceCoins: 180,
   },
@@ -44,6 +48,7 @@ export const SHOP_BIRDS: ShopBirdItem[] = [
     nameAr: 'الزمرد السيبراني',
     nameEn: 'Cyber Emerald',
     descAr: 'تصميم نيون زمردي مستوحى من الأركيد',
+    descEn: 'Arcade-inspired neon emerald cyber plumage',
     badgeText: '250 عملة',
     priceCoins: 250,
   },
@@ -52,6 +57,7 @@ export const SHOP_BIRDS: ShopBirdItem[] = [
     nameAr: 'البطل الذهبي الملكي',
     nameEn: 'Royal Gold',
     descAr: 'طائر البطولة المطلي بالذهب الخالص',
+    descEn: 'Championship bird plated in pure royal gold',
     badgeText: '350 عملة',
     priceCoins: 350,
   },
@@ -60,6 +66,7 @@ export const SHOP_BIRDS: ShopBirdItem[] = [
     nameAr: 'عنقاء اللهب الأرجواني',
     nameEn: 'Cosmic Phoenix',
     descAr: 'طائر أسطوري متوهج لمرحلة الفضاء',
+    descEn: 'Mythic glowing phoenix forged for Cyber Cosmos',
     badgeText: '500 عملة',
     priceCoins: 500,
   },
@@ -70,6 +77,7 @@ export interface AchievementDef {
   titleAr: string;
   titleEn: string;
   descAr: string;
+  descEn: string;
   rewardCoins: number;
   iconType: 'trophy' | 'coin' | 'shield' | 'flame' | 'star';
 }
@@ -80,6 +88,7 @@ export const ACHIEVEMENTS_LIST: AchievementDef[] = [
     titleAr: 'التحليق الأول',
     titleEn: 'First Flight',
     descAr: 'احصل على 5 نقاط في جولة واحدة',
+    descEn: 'Score 5 points in a single run',
     rewardCoins: 40,
     iconType: 'star',
   },
@@ -88,6 +97,7 @@ export const ACHIEVEMENTS_LIST: AchievementDef[] = [
     titleAr: 'المحلّق البرونزي',
     titleEn: 'Bronze Glider',
     descAr: 'وصلت إلى المرحلة الثانية (10 نقاط)',
+    descEn: 'Reach Stage 2 by scoring 10 points',
     rewardCoins: 60,
     iconType: 'trophy',
   },
@@ -96,6 +106,7 @@ export const ACHIEVEMENTS_LIST: AchievementDef[] = [
     titleAr: 'فارس النجوم الفضي',
     titleEn: 'Starlight Silver',
     descAr: 'وصلت إلى مرحلة ليل النجوم (20 نقطة)',
+    descEn: 'Reach Starlight Night (20 points)',
     rewardCoins: 100,
     iconType: 'trophy',
   },
@@ -104,6 +115,7 @@ export const ACHIEVEMENTS_LIST: AchievementDef[] = [
     titleAr: 'الأسطورة الذهبية',
     titleEn: 'Golden Legend',
     descAr: 'حطمت حاجز 30 نقطة في جولة واحدة',
+    descEn: 'Break the 30-point barrier in one run',
     rewardCoins: 160,
     iconType: 'trophy',
   },
@@ -112,6 +124,7 @@ export const ACHIEVEMENTS_LIST: AchievementDef[] = [
     titleAr: 'صائد العملات',
     titleEn: 'Coin Hunter',
     descAr: 'اجمع 25 عملة ذهبية أثناء الطيران',
+    descEn: 'Collect 25 gold coins in flight',
     rewardCoins: 75,
     iconType: 'coin',
   },
@@ -120,6 +133,7 @@ export const ACHIEVEMENTS_LIST: AchievementDef[] = [
     titleAr: 'خبير القدرات الخاصة',
     titleEn: 'Power-Up Master',
     descAr: 'التقط 5 عناصر مساعدة (Power-Ups) أثناء اللعب',
+    descEn: 'Collect 5 Power-Up orbs during gameplay',
     rewardCoins: 80,
     iconType: 'shield',
   },
@@ -128,6 +142,7 @@ export const ACHIEVEMENTS_LIST: AchievementDef[] = [
     titleAr: 'طيار النخبة',
     titleEn: 'Ace Hardcore Pilot',
     descAr: 'سجل 10 نقاط في المستوى الصعب (Hard)',
+    descEn: 'Score 10 points on Hard difficulty',
     rewardCoins: 150,
     iconType: 'flame',
   },
@@ -136,6 +151,7 @@ export const ACHIEVEMENTS_LIST: AchievementDef[] = [
     titleAr: 'جامع الطيور',
     titleEn: 'Flock Collector',
     descAr: 'افتح 3 شخصيات طيور في المتجر',
+    descEn: 'Unlock 3 bird characters in the shop',
     rewardCoins: 90,
     iconType: 'star',
   },

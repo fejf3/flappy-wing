@@ -2,31 +2,22 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Volume2,
   VolumeX,
-  Download,
-  Copy,
-  Check,
   RotateCcw,
-  Eye,
-  Sun,
-  Moon,
   Play,
   Pause,
   Settings,
   Palette,
   Home,
   Share2,
-  Smartphone,
   Music,
   Vibrate,
   X,
   Trophy,
   Sliders,
   Award,
-  Coins,
   Target,
   RefreshCw,
   Shield,
-  Zap,
   Globe,
   Lock,
 } from 'lucide-react';
@@ -42,11 +33,8 @@ import {
   BirdSkinId,
   StageThemeId,
 } from './pixelSprites';
-import { STANDALONE_FLAPPY_HTML } from './standaloneHtml';
-import { usePWAInstall } from './usePWAInstall';
 import {
   DailyChallengeState,
-  DAILY_CHALLENGE_POOL,
   loadDailyChallengeState,
   saveDailyChallengeState,
   getActiveChallengeTemplate,
@@ -71,9 +59,9 @@ type ActiveModal =
   | 'achievements'
   | 'leaderboard'
   | 'ios_install';
-type ActiveTab = 'arcade' | 'leaderboard' | 'physics' | 'audio' | 'source';
 export type DifficultyLevel = 'easy' | 'normal' | 'hard';
 export type StageModeOption = 'auto' | StageThemeId;
+export type AppLanguage = 'ar' | 'en';
 
 interface DifficultyConfig {
   id: DifficultyLevel;
@@ -173,6 +161,7 @@ interface TelemetrySnapshot {
   isNewBest: boolean;
   stageNumber: number;
   stageNameAr: string;
+  stageNameEn: string;
   activeShield: boolean;
   magnetFrames: number;
   slowMoFrames: number;
@@ -216,6 +205,7 @@ interface SavedSettings {
   difficulty: DifficultyLevel;
   skin: BirdSkinId;
   stageMode: StageModeOption;
+  language: AppLanguage;
 }
 
 function loadSavedSettings(): SavedSettings {
@@ -236,6 +226,7 @@ function loadSavedSettings(): SavedSettings {
         stageMode: ['auto', 'day', 'sunset', 'night', 'cosmos'].includes(parsed.stageMode)
           ? parsed.stageMode
           : 'auto',
+        language: parsed.language === 'en' ? 'en' : 'ar',
       };
     }
   } catch {
@@ -248,6 +239,7 @@ function loadSavedSettings(): SavedSettings {
     difficulty: 'normal',
     skin: 'classic',
     stageMode: 'auto',
+    language: 'ar',
   };
 }
 
@@ -283,7 +275,6 @@ export default function App() {
 
   const initialSettings = useRef<SavedSettings>(loadSavedSettings());
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('arcade');
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
   const [isPaused, setIsPaused] = useState<boolean>(false);
 
@@ -293,6 +284,11 @@ export default function App() {
   const [difficulty, setDifficulty] = useState<DifficultyLevel>(initialSettings.current.difficulty);
   const [selectedSkin, setSelectedSkin] = useState<BirdSkinId>(initialSettings.current.skin);
   const [stageMode, setStageMode] = useState<StageModeOption>(initialSettings.current.stageMode);
+  const [language, setLanguage] = useState<AppLanguage>(initialSettings.current.language);
+  const languageRef = useRef<AppLanguage>(language);
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
 
   const [dailyState, setDailyState] = useState<DailyChallengeState>(() =>
     loadDailyChallengeState()
@@ -321,14 +317,11 @@ export default function App() {
     profileRef.current = profile;
   }, [profile]);
 
-  const [showHitboxes, setShowHitboxes] = useState<boolean>(false);
-  const [copiedSource, setCopiedSource] = useState<boolean>(false);
+  const [showHitboxes] = useState<boolean>(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [skinPreviews, setSkinPreviews] = useState<Record<BirdSkinId, string>>(
     {} as Record<BirdSkinId, string>
   );
-
-  const { isInstallable, isInstalled, isIOS, isOnline, install } = usePWAInstall();
 
   const [telemetry, setTelemetry] = useState<TelemetrySnapshot>(() => {
     let initialBest = 0;
@@ -344,6 +337,7 @@ export default function App() {
       isNewBest: false,
       stageNumber: 1,
       stageNameAr: 'المرحلة 1: النهار المشرق',
+      stageNameEn: 'Stage 1: Sunny Meadow',
       activeShield: false,
       magnetFrames: 0,
       slowMoFrames: 0,
@@ -483,7 +477,7 @@ export default function App() {
           const def = ACHIEVEMENTS_LIST.find((a) => a.id === id);
           if (def) {
             bonusCoins += def.rewardCoins;
-            titles.push(def.titleAr);
+            titles.push(languageRef.current === 'ar' ? def.titleAr : def.titleEn);
           }
         }
         const nextProf: PlayerProfileState = {
@@ -499,7 +493,9 @@ export default function App() {
         }
         soundRef.current.playPowerUp();
         showToastMessage(
-          `إنجاز جديد: ${titles.join(' ، ')} (+${bonusCoins} عملة!)`
+          languageRef.current === 'ar'
+            ? `إنجاز جديد: ${titles.join(' ، ')} (+${bonusCoins} عملة!)`
+            : `Achievement Unlocked: ${titles.join(', ')} (+${bonusCoins} Coins!)`
         );
       }
     },
@@ -524,7 +520,9 @@ export default function App() {
         soundRef.current.playPowerUp();
         soundRef.current.triggerHaptic([35, 30, 65]);
         showToastMessage(
-          `اكتمل تحدي اليوم! (${tpl.titleAr}) — استلم +${tpl.rewardCoins} عملة`
+          languageRef.current === 'ar'
+            ? `اكتمل تحدي اليوم! (${tpl.titleAr}) — استلم +${tpl.rewardCoins} عملة`
+            : `Daily Challenge Complete! (${tpl.titleEn}) — Claim +${tpl.rewardCoins} Coins`
         );
       }
     },
@@ -540,7 +538,11 @@ export default function App() {
     setDailyState(updated);
     soundRef.current.playPowerUp();
     soundRef.current.triggerHaptic([40, 30, 80]);
-    showToastMessage(`تم استلام +${tpl.rewardCoins} عملة و${tpl.badgeNameAr}!`);
+    showToastMessage(
+      languageRef.current === 'ar'
+        ? `تم استلام +${tpl.rewardCoins} عملة و${tpl.badgeNameAr}!`
+        : `Claimed +${tpl.rewardCoins} Coins & ${tpl.badgeNameEn}!`
+    );
   }, [showToastMessage]);
 
   const handleNextBonusChallenge = useCallback(() => {
@@ -561,7 +563,9 @@ export default function App() {
     if (dailyState.coins < birdItem.priceCoins) {
       soundRef.current.playHit();
       showToastMessage(
-        `تحتاج إلى ${birdItem.priceCoins - dailyState.coins} عملة إضافية لشراء ${birdItem.nameAr}`
+        language === 'ar'
+          ? `تحتاج إلى ${birdItem.priceCoins - dailyState.coins} عملة إضافية لشراء ${birdItem.nameAr}`
+          : `You need ${birdItem.priceCoins - dailyState.coins} more coins to unlock ${birdItem.nameEn}`
       );
       return;
     }
@@ -585,7 +589,11 @@ export default function App() {
     setSelectedSkin(birdItem.id);
 
     soundRef.current.playPowerUp();
-    showToastMessage(`تم شراء وفتح ${birdItem.nameAr} بنجاح!`);
+    showToastMessage(
+      language === 'ar'
+        ? `تم شراء وفتح ${birdItem.nameAr} بنجاح!`
+        : `Unlocked and equipped ${birdItem.nameEn}!`
+    );
     checkAndUnlockAchievements(gameRef.current.score, difficulty, nextProfile);
   };
 
@@ -615,12 +623,13 @@ export default function App() {
         difficulty,
         skin: selectedSkin,
         stageMode,
+        language,
       };
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(toSave));
     } catch {
       // ignore
     }
-  }, [sfxEnabled, musicEnabled, hapticsEnabled, difficulty, selectedSkin, stageMode, isPaused]);
+  }, [sfxEnabled, musicEnabled, hapticsEnabled, difficulty, selectedSkin, stageMode, language, isPaused]);
 
   // Mobile Lifecycle & Visibility Handling:
   // Automatically pause gameplay & stop audio when app goes to background or loses visibility
@@ -753,6 +762,7 @@ export default function App() {
       isNewBest: g.isNewBest,
       stageNumber: stg.stageNum,
       stageNameAr: stg.nameAr,
+      stageNameEn: stg.nameEn,
       activeShield: g.activeShield,
       magnetFrames: g.magnetFrames,
       slowMoFrames: g.slowMoFrames,
@@ -864,8 +874,11 @@ export default function App() {
   const handleShareScore = async () => {
     const g = gameRef.current;
     soundRef.current.playClick();
-    const diffLabel = DIFFICULTY_CONFIGS[difficulty].labelAr;
-    const shareText = `حققت ${g.score} نقطة في لعبة FLAPPY WING (مستوى ${diffLabel} · أفضل نتيجة: ${g.bestScore})! هل يمكنك تحطيم رقمي؟`;
+    const diffCfg = DIFFICULTY_CONFIGS[difficulty];
+    const shareText =
+      language === 'ar'
+        ? `حققت ${g.score} نقطة في لعبة FLAPPY WING (مستوى ${diffCfg.labelAr} · أفضل نتيجة: ${g.bestScore})! هل يمكنك تحطيم رقمي؟`
+        : `I scored ${g.score} in FLAPPY WING (${diffCfg.labelEn} mode · Best: ${g.bestScore})! Can you beat my score?`;
 
     if (navigator.share) {
       try {
@@ -882,44 +895,14 @@ export default function App() {
 
     try {
       await navigator.clipboard.writeText(`${shareText} ${window.location.href}`);
-      showToastMessage('تم نسخ النتيجة للحافظة لمشاركتها!');
+      showToastMessage(
+        language === 'ar'
+          ? 'تم نسخ النتيجة للحافظة لمشاركتها!'
+          : 'Score copied to clipboard to share!'
+      );
     } catch {
       showToastMessage(shareText);
     }
-  };
-
-  const handleResetHighScore = () => {
-    soundRef.current.playClick();
-    try {
-      localStorage.removeItem(BEST_SCORE_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-    gameRef.current.bestScore = 0;
-    gameRef.current.isNewBest = false;
-    setTelemetry((prev) => ({ ...prev, bestScore: 0, isNewBest: false }));
-  };
-
-  const handleCopyStandalone = async () => {
-    try {
-      await navigator.clipboard.writeText(STANDALONE_FLAPPY_HTML);
-      setCopiedSource(true);
-      setTimeout(() => setCopiedSource(false), 2000);
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleDownloadStandalone = () => {
-    const blob = new Blob([STANDALONE_FLAPPY_HTML], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'flappy-wing-pixel-perfect.html';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   // Global keyboard listener (Spacebar / UpArrow / W / Escape for Pause)
@@ -1345,6 +1328,7 @@ export default function App() {
           isNewBest: g.isNewBest,
           stageNumber: stg.stageNum,
           stageNameAr: stg.nameAr,
+          stageNameEn: stg.nameEn,
           activeShield: g.activeShield,
           magnetFrames: g.magnetFrames,
           slowMoFrames: g.slowMoFrames,
@@ -1601,408 +1585,266 @@ export default function App() {
     Math.round((dailyState.progress / activeChallenge.target) * 100)
   );
 
+  const isAr = language === 'ar';
+  const dirAttr = isAr ? 'rtl' : 'ltr';
+  const stageLabel = isAr ? telemetry.stageNameAr : telemetry.stageNameEn;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col select-none pt-safe pb-safe">
-      {/* Top Bar following strict 3-zone contract */}
-      <header className="flex items-center justify-between gap-8 px-4 sm:px-6 py-3 border-b border-slate-800/80 bg-slate-950/95 z-30">
-        {/* Zone 1: Single text element wordmark */}
-        <a
-          href="#top"
-          onClick={(e) => {
-            e.preventDefault();
-            goToMainMenu();
-          }}
-          className="text-base font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0"
-        >
-          FLAPPY WING
-        </a>
-
-        {/* Zone 2: 5 concise single-line text navigation links */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
-          <button
-            type="button"
-            onClick={() => setActiveTab('arcade')}
-            className={`hover:text-slate-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'arcade' ? 'text-amber-400 underline underline-offset-8' : ''
-            }`}
-          >
-            Arcade Studio
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('leaderboard')}
-            className={`hover:text-slate-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'leaderboard' ? 'text-amber-400 underline underline-offset-8' : ''
-            }`}
-          >
-            Leaderboard
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('physics')}
-            className={`hover:text-slate-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'physics' ? 'text-amber-400 underline underline-offset-8' : ''
-            }`}
-          >
-            Mobile & Capacitor
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('audio')}
-            className={`hover:text-slate-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'audio' ? 'text-amber-400 underline underline-offset-8' : ''
-            }`}
-          >
-            Web Audio Synth
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('source')}
-            className={`hover:text-slate-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'source' ? 'text-amber-400 underline underline-offset-8' : ''
-            }`}
-          >
-            Single-File HTML5
-          </button>
-        </nav>
-
-        {/* Zone 3: 1 primary action (PWA Install if available, or Export Single HTML) */}
-        <div className="flex items-center shrink-0">
-          {!isInstalled && isInstallable ? (
-            <button
-              type="button"
-              onClick={install}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-950 bg-emerald-400 rounded-lg hover:bg-emerald-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>تثبيت التطبيق (PWA)</span>
-            </button>
-          ) : !isInstalled && isIOS ? (
-            <button
-              type="button"
-              onClick={() => setActiveModal('ios_install')}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-950 bg-emerald-400 rounded-lg hover:bg-emerald-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>تثبيت على آيفون</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleDownloadStandalone}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-950 bg-amber-400 rounded-lg hover:bg-amber-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Single HTML</span>
-            </button>
-          )}
-        </div>
-      </header>
-
-      {/* Offline Banner if network disconnects */}
-      {!isOnline && (
-        <div className="bg-amber-500/95 text-slate-950 text-xs font-semibold text-center py-1.5 px-4">
-          وضع عدم الاتصال (Offline Mode) — اللعبة وجميع المراحل والمتجر تعمل محلياً بالكامل
-        </div>
-      )}
-
+    <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-center select-none pt-safe pb-safe px-2 py-2">
       {/* Feedback Toast */}
       {shareToast && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-emerald-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-xl">
+        <div
+          dir={dirAttr}
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-emerald-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-xl"
+        >
           {shareToast}
         </div>
       )}
 
-      {/* Main 1440px-centered Responsive Mobile + Desktop Workspace */}
-      <main className="flex-1 w-full max-w-[1360px] mx-auto px-2 sm:px-6 py-3 sm:py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-        {/* Left/Center Column: Mobile-First 9:16 Portrait Game Viewport */}
-        <section className="lg:col-span-5 flex flex-col items-center w-full">
-          <div className="relative p-2 sm:p-3 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl">
-            {/* Inner Viewport Wrapper matching 9:16 (288x512) portrait aspect ratio */}
-            <div className="relative w-[min(92vw,372px)] sm:w-[374px] md:w-[390px] aspect-[288/512] rounded-2xl overflow-hidden shadow-inner">
-              <canvas
-                ref={canvasRef}
-                width={CANVAS_WIDTH}
-                height={CANVAS_HEIGHT}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  handleFlapAction();
-                }}
-                className="pixelated-canvas block w-full h-full cursor-pointer select-none touch-none"
-                aria-label="FLAPPY WING Mobile Game Canvas"
-              />
+      {/* Centered Mobile-First 9:16 Portrait Game Screen Only */}
+      <main className="w-full flex flex-col items-center justify-center">
+        <div className="relative p-2 sm:p-3 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl">
+          {/* Inner Viewport Wrapper matching 9:16 (288x512) portrait aspect ratio */}
+          <div className="relative w-[min(92vw,380px)] sm:w-[384px] md:w-[400px] aspect-[288/512] rounded-2xl overflow-hidden shadow-inner">
+            <canvas
+              ref={canvasRef}
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                handleFlapAction();
+              }}
+              className="pixelated-canvas block w-full h-full cursor-pointer select-none touch-none"
+              aria-label="FLAPPY WING Mobile Game Canvas"
+            />
 
-              {/* ===================================================================
-                  TOP CORNER FLOATING CONTROLS & POWER-UP STATUS DURING GAMEPLAY
-                 =================================================================== */}
-              {(telemetry.state === 'PLAYING' || telemetry.state === 'GET_READY') &&
-                activeModal === 'none' && (
-                  <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20">
-                    <button
-                      type="button"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={handleTogglePause}
-                      aria-label="إيقاف مؤقت / Pause"
-                      className="pointer-events-auto min-w-[44px] min-h-[44px] rounded-xl bg-slate-950/50 hover:bg-slate-950/75 backdrop-blur-md border border-white/20 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
-                    >
-                      <Pause className="w-5 h-5" />
-                    </button>
+            {/* ===================================================================
+                TOP CORNER FLOATING CONTROLS & POWER-UP STATUS DURING GAMEPLAY
+               =================================================================== */}
+            {(telemetry.state === 'PLAYING' || telemetry.state === 'GET_READY') &&
+              activeModal === 'none' && (
+                <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20">
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={handleTogglePause}
+                    aria-label={isAr ? 'إيقاف مؤقت' : 'Pause'}
+                    className="pointer-events-auto min-w-[44px] min-h-[44px] rounded-xl bg-slate-950/50 hover:bg-slate-950/75 backdrop-blur-md border border-white/20 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
+                  >
+                    <Pause className="w-5 h-5" />
+                  </button>
 
-                    {/* Active Power-Up Badges in Top Bar */}
-                    <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold">
-                      {telemetry.activeShield && (
-                        <span className="px-2 py-1 rounded-lg bg-sky-500/80 text-slate-950 flex items-center gap-1">
-                          <Shield className="w-3.5 h-3.5" />
-                          <span>درع</span>
-                        </span>
-                      )}
-                      {telemetry.magnetFrames > 0 && (
-                        <span className="px-2 py-1 rounded-lg bg-rose-500/85 text-white">
-                          مغناطيس {Math.ceil(telemetry.magnetFrames / 60)}s
-                        </span>
-                      )}
-                      {telemetry.slowMoFrames > 0 && (
-                        <span className="px-2 py-1 rounded-lg bg-purple-500/85 text-white">
-                          تبطيء {Math.ceil(telemetry.slowMoFrames / 60)}s
-                        </span>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        setSfxEnabled((v) => !v);
-                      }}
-                      aria-label="كتم الصوت / Toggle SFX"
-                      className="pointer-events-auto min-w-[44px] min-h-[44px] rounded-xl bg-slate-950/50 hover:bg-slate-950/75 backdrop-blur-md border border-white/20 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
-                    >
-                      {sfxEnabled ? (
-                        <Volume2 className="w-5 h-5 text-amber-300" />
-                      ) : (
-                        <VolumeX className="w-5 h-5 text-rose-400" />
-                      )}
-                    </button>
+                  {/* Active Power-Up Badges in Top Bar */}
+                  <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold">
+                    {telemetry.activeShield && (
+                      <span className="px-2 py-1 rounded-lg bg-sky-500/80 text-slate-950 flex items-center gap-1">
+                        <Shield className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'درع' : 'SHIELD'}</span>
+                      </span>
+                    )}
+                    {telemetry.magnetFrames > 0 && (
+                      <span className="px-2 py-1 rounded-lg bg-rose-500/85 text-white">
+                        {isAr ? 'مغناطيس' : 'MAGNET'} {Math.ceil(telemetry.magnetFrames / 60)}s
+                      </span>
+                    )}
+                    {telemetry.slowMoFrames > 0 && (
+                      <span className="px-2 py-1 rounded-lg bg-purple-500/85 text-white">
+                        {isAr ? 'تبطيء' : 'SLOW'} {Math.ceil(telemetry.slowMoFrames / 60)}s
+                      </span>
+                    )}
                   </div>
-                )}
 
-              {/* ===================================================================
-                  1. MAIN MENU OVERLAY (شاشة البداية الجذابة + المهام اليومية)
-                 =================================================================== */}
-              {telemetry.state === 'MAIN_MENU' && activeModal === 'none' && (
-                <div
-                  dir="rtl"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="absolute inset-0 z-20 flex flex-col justify-between p-4 sm:p-5 bg-gradient-to-b from-slate-950/65 via-slate-950/20 to-slate-950/92"
-                >
-                  {/* Top Bar inside Main Menu: Best Score, Coins, Achievements */}
-                  <div className="flex items-center justify-between text-xs font-semibold text-white bg-slate-950/70 backdrop-blur-md px-3.5 py-2.5 rounded-2xl border border-white/15 font-mono tabular-nums">
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setSfxEnabled((v) => !v);
+                    }}
+                    aria-label={isAr ? 'كتم الصوت' : 'Toggle SFX'}
+                    className="pointer-events-auto min-w-[44px] min-h-[44px] rounded-xl bg-slate-950/50 hover:bg-slate-950/75 backdrop-blur-md border border-white/20 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
+                  >
+                    {sfxEnabled ? (
+                      <Volume2 className="w-5 h-5 text-amber-300" />
+                    ) : (
+                      <VolumeX className="w-5 h-5 text-rose-400" />
+                    )}
+                  </button>
+                </div>
+              )}
+
+            {/* ===================================================================
+                1. MAIN MENU OVERLAY (شاشة البداية الجذابة + المهام اليومية)
+               =================================================================== */}
+            {telemetry.state === 'MAIN_MENU' && activeModal === 'none' && (
+              <div
+                dir={dirAttr}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute inset-0 z-20 flex flex-col justify-between p-4 sm:p-5 bg-gradient-to-b from-slate-950/65 via-slate-950/20 to-slate-950/92"
+              >
+                {/* Top Bar inside Main Menu: Best Score, Coins, Achievements */}
+                <div className="flex items-center justify-between text-xs font-semibold text-white bg-slate-950/70 backdrop-blur-md px-3.5 py-2.5 rounded-2xl border border-white/15 font-mono tabular-nums">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setActiveModal('leaderboard');
+                    }}
+                    className="hover:text-amber-300 transition-colors cursor-pointer"
+                  >
+                    {isAr ? `الأفضل: ${telemetry.bestScore}` : `Best: ${telemetry.bestScore}`}
+                  </button>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setActiveModal('skins');
+                    }}
+                    className="text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
+                  >
+                    {isAr ? `العملات: ${dailyState.coins}` : `Coins: ${dailyState.coins}`}
+                  </button>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setActiveModal('achievements');
+                    }}
+                    className="text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer"
+                  >
+                    {isAr
+                      ? `الإنجازات: ${profile.unlockedAchievements.length}/${ACHIEVEMENTS_LIST.length}`
+                      : `Awards: ${profile.unlockedAchievements.length}/${ACHIEVEMENTS_LIST.length}`}
+                  </button>
+                </div>
+
+                {/* Center Title Lockup */}
+                <div className="text-center mt-1">
+                  <h2 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_3px_0_rgba(0,0,0,0.85)]">
+                    FLAPPY WING
+                  </h2>
+                  <p className="text-xs text-slate-200 mt-0.5 drop-shadow">
+                    {isAr
+                      ? `${activeSkinMeta.nameAr} · المستوى: ${activeDiffMeta.labelAr}`
+                      : `${activeSkinMeta.nameEn} · Mode: ${activeDiffMeta.labelEn}`}
+                  </p>
+                </div>
+
+                {/* Daily Challenge Widget */}
+                <div className="bg-slate-900/90 backdrop-blur-md border border-white/15 rounded-2xl p-3 shadow-xl flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                      <Target className="w-3.5 h-3.5 shrink-0" />
+                      <span>{isAr ? 'تحدي اليوم' : 'Daily Challenge'}</span>
+                    </div>
+                    <span className="text-[11px] font-mono tabular-nums text-emerald-300 font-semibold">
+                      +{activeChallenge.rewardCoins} {isAr ? 'عملة' : 'Coins'}
+                    </span>
+                  </div>
+
+                  <div className="text-xs font-semibold text-slate-100 leading-snug">
+                    {isAr ? activeChallenge.titleAr : activeChallenge.titleEn}
+                  </div>
+
+                  <div className="flex items-center gap-2.5 mt-0.5">
+                    <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full bg-amber-400 transition-transform duration-150 ${
+                          isAr ? 'origin-right' : 'origin-left'
+                        }`}
+                        style={{
+                          transform: `scaleX(${challengeProgressPercent / 100})`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs font-mono tabular-nums font-bold text-slate-200 shrink-0">
+                      {dailyState.progress}/{activeChallenge.target}
+                    </span>
+                  </div>
+
+                  {dailyState.completed && !dailyState.claimed && (
                     <button
                       type="button"
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        setActiveModal('leaderboard');
-                      }}
-                      className="hover:text-amber-300 transition-colors cursor-pointer"
+                      onClick={handleClaimDailyReward}
+                      className="mt-1 w-full min-h-[40px] rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] transition-transform cursor-pointer"
                     >
-                      الأفضل: {telemetry.bestScore}
+                      <Award className="w-4 h-4" />
+                      <span>
+                        {isAr
+                          ? `استلام المكافأة (+${activeChallenge.rewardCoins} عملة)`
+                          : `Claim Reward (+${activeChallenge.rewardCoins} Coins)`}
+                      </span>
                     </button>
-                    <span aria-hidden="true">·</span>
+                  )}
+
+                  {dailyState.claimed && (
+                    <div className="mt-0.5 flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
+                      <span className="text-[11px] text-emerald-400 font-semibold">
+                        {isAr ? 'تم إنجاز التحدي واستلام الوسام' : 'Challenge Complete & Claimed'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleNextBonusChallenge}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 hover:text-amber-200 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>{isAr ? 'تحدي إضافي' : 'Next Goal'}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Thumb-Zone Navigation & Action Buttons */}
+                <div className="flex flex-col gap-2 w-full">
+                  {/* Prominent PLAY Button */}
+                  <button
+                    type="button"
+                    onClick={startNewGameSession}
+                    className="w-full min-h-[52px] rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-base flex items-center justify-center gap-2.5 shadow-lg shadow-amber-950/40 active:scale-[0.98] transition-transform cursor-pointer"
+                  >
+                    <Play className="w-5 h-5 fill-slate-950" />
+                    <span>{isAr ? 'ابدأ اللعب' : 'PLAY GAME'}</span>
+                  </button>
+
+                  {/* 4-Button Grid for Shop/Skins, Achievements, Leaderboard, Settings */}
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         soundRef.current.playClick();
                         setActiveModal('skins');
                       }}
-                      className="text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
+                      className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
                     >
-                      العملات: {dailyState.coins}
+                      <Palette className="w-4 h-4 text-amber-400" />
+                      <span>{isAr ? 'متجر الطيور' : 'Bird Shop'}</span>
                     </button>
-                    <span aria-hidden="true">·</span>
+
                     <button
                       type="button"
                       onClick={() => {
                         soundRef.current.playClick();
                         setActiveModal('achievements');
                       }}
-                      className="text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer"
+                      className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
                     >
-                      الإنجازات: {profile.unlockedAchievements.length}/{ACHIEVEMENTS_LIST.length}
+                      <Trophy className="w-4 h-4 text-emerald-400" />
+                      <span>{isAr ? 'الإنجازات' : 'Achievements'}</span>
                     </button>
-                  </div>
-
-                  {/* Center Title Lockup */}
-                  <div className="text-center mt-1">
-                    <h2 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_3px_0_rgba(0,0,0,0.85)]">
-                      FLAPPY WING
-                    </h2>
-                    <p className="text-xs text-slate-200 mt-0.5 drop-shadow">
-                      {activeSkinMeta.nameAr} · المستوى: {activeDiffMeta.labelAr}
-                    </p>
-                  </div>
-
-                  {/* Daily Challenge Widget */}
-                  <div className="bg-slate-900/90 backdrop-blur-md border border-white/15 rounded-2xl p-3 shadow-xl flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                        <Target className="w-3.5 h-3.5 shrink-0" />
-                        <span>تحدي اليوم · Daily Challenge</span>
-                      </div>
-                      <span className="text-[11px] font-mono tabular-nums text-emerald-300 font-semibold">
-                        +{activeChallenge.rewardCoins} عملة
-                      </span>
-                    </div>
-
-                    <div className="text-xs font-semibold text-slate-100 leading-snug">
-                      {activeChallenge.titleAr}
-                    </div>
-
-                    <div className="flex items-center gap-2.5 mt-0.5">
-                      <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-amber-400 transition-transform duration-150 origin-right"
-                          style={{
-                            transform: `scaleX(${challengeProgressPercent / 100})`,
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs font-mono tabular-nums font-bold text-slate-200 shrink-0">
-                        {dailyState.progress}/{activeChallenge.target}
-                      </span>
-                    </div>
-
-                    {dailyState.completed && !dailyState.claimed && (
-                      <button
-                        type="button"
-                        onClick={handleClaimDailyReward}
-                        className="mt-1 w-full min-h-[40px] rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] transition-transform cursor-pointer"
-                      >
-                        <Award className="w-4 h-4" />
-                        <span>استلام المكافأة (+{activeChallenge.rewardCoins} عملة)</span>
-                      </button>
-                    )}
-
-                    {dailyState.claimed && (
-                      <div className="mt-0.5 flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
-                        <span className="text-[11px] text-emerald-400 font-semibold">
-                          تم إنجاز التحدي واستلام الوسام
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleNextBonusChallenge}
-                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 hover:text-amber-200 cursor-pointer"
-                        >
-                          <RefreshCw className="w-3 h-3" />
-                          <span>تحدي إضافي</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Thumb-Zone Navigation & Action Buttons */}
-                  <div className="flex flex-col gap-2 w-full">
-                    {/* Prominent PLAY Button */}
-                    <button
-                      type="button"
-                      onClick={startNewGameSession}
-                      className="w-full min-h-[52px] rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-base flex items-center justify-center gap-2.5 shadow-lg shadow-amber-950/40 active:scale-[0.98] transition-transform cursor-pointer"
-                    >
-                      <Play className="w-5 h-5 fill-slate-950" />
-                      <span>ابدأ اللعب · PLAY</span>
-                    </button>
-
-                    {/* 4-Button Grid for Shop/Skins, Achievements, Leaderboard, Settings */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          soundRef.current.playClick();
-                          setActiveModal('skins');
-                        }}
-                        className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
-                      >
-                        <Palette className="w-4 h-4 text-amber-400" />
-                        <span>متجر الطيور</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          soundRef.current.playClick();
-                          setActiveModal('achievements');
-                        }}
-                        className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
-                      >
-                        <Trophy className="w-4 h-4 text-emerald-400" />
-                        <span>الإنجازات</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          soundRef.current.playClick();
-                          fetchLeaderboard();
-                          setActiveModal('leaderboard');
-                        }}
-                        className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
-                      >
-                        <Globe className="w-4 h-4 text-purple-400" />
-                        <span>الترتيب والأفضل</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          soundRef.current.playClick();
-                          setActiveModal('settings');
-                        }}
-                        className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
-                      >
-                        <Settings className="w-4 h-4 text-sky-400" />
-                        <span>الإعدادات</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ===================================================================
-                  2. PAUSE MENU MODAL (قائمة الإيقاف المؤقت)
-                 =================================================================== */}
-              {isPaused && (
-                <div
-                  dir="rtl"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="absolute inset-0 z-30 flex items-center justify-center p-5 bg-slate-950/75 backdrop-blur-md"
-                >
-                  <div className="w-full bg-slate-900 border border-slate-700/80 rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
-                    <div className="text-center pb-2 border-b border-slate-800">
-                      <h3 className="text-lg font-bold text-white">إيقاف مؤقت (Paused)</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        النتيجة: {telemetry.score} · {telemetry.stageNameAr}
-                      </p>
-                    </div>
 
                     <button
                       type="button"
                       onClick={() => {
                         soundRef.current.playClick();
-                        setIsPaused(false);
+                        fetchLeaderboard();
+                        setActiveModal('leaderboard');
                       }}
-                      className="w-full min-h-[48px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
+                      className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
                     >
-                      <Play className="w-4 h-4 fill-slate-950" />
-                      <span>متابعة اللعب (Resume)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={startNewGameSession}
-                      className="w-full min-h-[48px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-sm border border-slate-700 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
-                    >
-                      <RotateCcw className="w-4 h-4 text-emerald-400" />
-                      <span>إعادة المحاولة (Restart)</span>
+                      <Globe className="w-4 h-4 text-purple-400" />
+                      <span>{isAr ? 'الترتيب والأفضل' : 'Leaderboard'}</span>
                     </button>
 
                     <button
@@ -2011,1175 +1853,821 @@ export default function App() {
                         soundRef.current.playClick();
                         setActiveModal('settings');
                       }}
-                      className="w-full min-h-[48px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-sm border border-slate-700 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
+                      className="min-h-[46px] rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 backdrop-blur-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
                     >
                       <Settings className="w-4 h-4 text-sky-400" />
-                      <span>الإعدادات (Settings)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={goToMainMenu}
-                      className="w-full min-h-[48px] rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-300 font-semibold text-sm border border-slate-800 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
-                    >
-                      <Home className="w-4 h-4" />
-                      <span>القائمة الرئيسية (Home)</span>
+                      <span>{isAr ? 'الإعدادات' : 'Settings'}</span>
                     </button>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* ===================================================================
-                  3. GAME OVER MODAL (شاشة نهاية اللعبة الاحترافية)
-                 =================================================================== */}
-              {telemetry.state === 'GAME_OVER' && activeModal === 'none' && (
-                <div
-                  dir="rtl"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="absolute inset-0 z-20 flex flex-col justify-between p-5 bg-gradient-to-b from-slate-950/75 via-slate-950/60 to-slate-950/92 backdrop-blur-[2px]"
-                >
-                  <div className="text-center pt-1">
-                    <h2 className="text-2xl font-extrabold text-amber-400 tracking-tight drop-shadow-[0_2px_0_rgba(0,0,0,0.9)]">
-                      انتهت الجولة · GAME OVER
-                    </h2>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      {telemetry.stageNameAr} · رصيد العملات: {dailyState.coins}
+            {/* ===================================================================
+                2. PAUSE MENU MODAL (قائمة الإيقاف المؤقت)
+               =================================================================== */}
+            {isPaused && (
+              <div
+                dir={dirAttr}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute inset-0 z-30 flex items-center justify-center p-5 bg-slate-950/75 backdrop-blur-md"
+              >
+                <div className="w-full bg-slate-900 border border-slate-700/80 rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
+                  <div className="text-center pb-2 border-b border-slate-800">
+                    <h3 className="text-lg font-bold text-white">
+                      {isAr ? 'إيقاف مؤقت' : 'Game Paused'}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {isAr
+                        ? `النتيجة: ${telemetry.score} · ${stageLabel}`
+                        : `Score: ${telemetry.score} · ${stageLabel}`}
                     </p>
                   </div>
 
-                  {/* Classic Scoreboard Card */}
-                  <div className="my-auto bg-[#ded895] text-[#543847] border-4 border-[#543847] rounded-2xl p-4 shadow-2xl flex flex-col gap-3">
-                    <div className="grid grid-cols-2 gap-4 items-center">
-                      <div className="flex flex-col gap-3">
-                        <div>
-                          <div className="text-xs font-extrabold uppercase tracking-wider text-[#b85b18]">
-                            النتيجة (SCORE)
-                          </div>
-                          <div className="text-3xl font-black font-mono tabular-nums text-[#543847] leading-none mt-1">
-                            {telemetry.score}
-                          </div>
-                        </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setIsPaused(false);
+                    }}
+                    className="w-full min-h-[48px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
+                  >
+                    <Play className="w-4 h-4 fill-slate-950" />
+                    <span>{isAr ? 'متابعة اللعب' : 'Resume Game'}</span>
+                  </button>
 
-                        <div className="pt-2 border-t border-[#c4ba70]">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-extrabold uppercase tracking-wider text-[#b85b18]">
-                              الأفضل (BEST)
-                            </span>
-                            {telemetry.isNewBest && (
-                              <span className="bg-red-600 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded">
-                                جديد NEW
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-2xl font-black font-mono tabular-nums text-[#543847] leading-none mt-1">
-                            {telemetry.bestScore}
-                          </div>
+                  <button
+                    type="button"
+                    onClick={startNewGameSession}
+                    className="w-full min-h-[48px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-sm border border-slate-700 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
+                  >
+                    <RotateCcw className="w-4 h-4 text-emerald-400" />
+                    <span>{isAr ? 'إعادة المحاولة' : 'Restart'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setActiveModal('settings');
+                    }}
+                    className="w-full min-h-[48px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-sm border border-slate-700 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
+                  >
+                    <Settings className="w-4 h-4 text-sky-400" />
+                    <span>{isAr ? 'الإعدادات' : 'Settings'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={goToMainMenu}
+                    className="w-full min-h-[48px] rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-300 font-semibold text-sm border border-slate-800 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
+                  >
+                    <Home className="w-4 h-4" />
+                    <span>{isAr ? 'القائمة الرئيسية' : 'Main Menu'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ===================================================================
+                3. GAME OVER MODAL (شاشة نهاية اللعبة الاحترافية)
+               =================================================================== */}
+            {telemetry.state === 'GAME_OVER' && activeModal === 'none' && (
+              <div
+                dir={dirAttr}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute inset-0 z-20 flex flex-col justify-between p-5 bg-gradient-to-b from-slate-950/75 via-slate-950/60 to-slate-950/92 backdrop-blur-[2px]"
+              >
+                <div className="text-center pt-1">
+                  <h2 className="text-2xl font-extrabold text-amber-400 tracking-tight drop-shadow-[0_2px_0_rgba(0,0,0,0.9)]">
+                    {isAr ? 'انتهت الجولة' : 'GAME OVER'}
+                  </h2>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    {isAr
+                      ? `${stageLabel} · رصيد العملات: ${dailyState.coins}`
+                      : `${stageLabel} · Coins: ${dailyState.coins}`}
+                  </p>
+                </div>
+
+                {/* Classic Scoreboard Card */}
+                <div className="my-auto bg-[#ded895] text-[#543847] border-4 border-[#543847] rounded-2xl p-4 shadow-2xl flex flex-col gap-3">
+                  <div className="grid grid-cols-2 gap-4 items-center">
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <div className="text-xs font-extrabold uppercase tracking-wider text-[#b85b18]">
+                          {isAr ? 'النتيجة' : 'SCORE'}
+                        </div>
+                        <div className="text-3xl font-black font-mono tabular-nums text-[#543847] leading-none mt-1">
+                          {telemetry.score}
                         </div>
                       </div>
 
-                      {/* Medal Award */}
-                      <div className="flex flex-col items-center justify-center bg-[#c9be74] border-2 border-[#b5ab60] rounded-xl p-3 min-h-[104px]">
-                        <span className="text-[11px] font-extrabold text-[#7a591b] mb-1.5">
-                          الميدالية (MEDAL)
-                        </span>
-                        {currentMedalInfo ? (
-                          <div className="flex flex-col items-center">
-                            <div
-                              className={`w-11 h-11 rounded-full bg-gradient-to-br ${currentMedalInfo.color} border-2 border-[#543847] flex items-center justify-center shadow-md`}
-                            >
-                              <Trophy className="w-5 h-5" />
-                            </div>
-                            <span className="text-xs font-bold text-[#543847] mt-1">
-                              {currentMedalInfo.nameAr}
+                      <div className="pt-2 border-t border-[#c4ba70]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-extrabold uppercase tracking-wider text-[#b85b18]">
+                            {isAr ? 'الأفضل' : 'BEST'}
+                          </span>
+                          {telemetry.isNewBest && (
+                            <span className="bg-red-600 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded">
+                              {isAr ? 'جديد' : 'NEW'}
                             </span>
-                          </div>
-                        ) : (
-                          <div className="text-center text-[11px] text-[#7a6f3a] font-medium">
-                            10 نقاط لنيل البرونزية
-                          </div>
-                        )}
+                          )}
+                        </div>
+                        <div className="text-2xl font-black font-mono tabular-nums text-[#543847] leading-none mt-1">
+                          {telemetry.bestScore}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Daily Challenge Quick Status inside Game Over */}
-                    <div className="pt-2 border-t border-[#c4ba70] flex items-center justify-between text-xs">
-                      <span className="font-bold text-[#543847] truncate">
-                        تحدي اليوم: {dailyState.progress}/{activeChallenge.target}
+                    {/* Medal Award */}
+                    <div className="flex flex-col items-center justify-center bg-[#c9be74] border-2 border-[#b5ab60] rounded-xl p-3 min-h-[104px]">
+                      <span className="text-[11px] font-extrabold text-[#7a591b] mb-1.5">
+                        {isAr ? 'الميدالية' : 'MEDAL'}
                       </span>
-                      {dailyState.completed && !dailyState.claimed ? (
-                        <button
-                          type="button"
-                          onClick={handleClaimDailyReward}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px] cursor-pointer"
-                        >
-                          استلام +{activeChallenge.rewardCoins} عملة
-                        </button>
+                      {currentMedalInfo ? (
+                        <div className="flex flex-col items-center">
+                          <div
+                            className={`w-11 h-11 rounded-full bg-gradient-to-br ${currentMedalInfo.color} border-2 border-[#543847] flex items-center justify-center shadow-md`}
+                          >
+                            <Trophy className="w-5 h-5" />
+                          </div>
+                          <span className="text-xs font-bold text-[#543847] mt-1">
+                            {isAr ? currentMedalInfo.nameAr : currentMedalInfo.nameEn}
+                          </span>
+                        </div>
                       ) : (
-                        <span className="text-[11px] font-semibold text-[#7a591b]">
-                          {dailyState.claimed ? 'مكتمل ومُستلم' : activeChallenge.titleAr}
-                        </span>
+                        <div className="text-center text-[11px] text-[#7a6f3a] font-medium">
+                          {isAr ? '10 نقاط لنيل البرونزية' : '10 pts for Bronze'}
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Bottom Thumb-Zone Action Buttons */}
-                  <div className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={startNewGameSession}
-                      className="w-full min-h-[50px] rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-base flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-transform cursor-pointer"
-                    >
-                      <RotateCcw className="w-5 h-5" />
-                      <span>إعادة المحاولة · Play Again</span>
-                    </button>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={handleShareScore}
-                        className="min-h-[44px] rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
-                      >
-                        <Share2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>مشاركة</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          soundRef.current.playClick();
-                          setActiveModal('skins');
-                        }}
-                        className="min-h-[44px] rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
-                      >
-                        <Palette className="w-3.5 h-3.5 text-amber-400" />
-                        <span>المتجر</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={goToMainMenu}
-                        className="min-h-[44px] rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
-                      >
-                        <Home className="w-3.5 h-3.5 text-sky-400" />
-                        <span>الرئيسية</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ===================================================================
-                  4. SETTINGS MODAL (شاشة الإعدادات والمراحل والصعوبة)
-                 =================================================================== */}
-              {activeModal === 'settings' && (
-                <div
-                  dir="rtl"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
-                >
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <Sliders className="w-4 h-4 text-amber-400" />
-                      <h3 className="text-base font-bold text-white">
-                        الإعدادات (Settings)
-                      </h3>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        setActiveModal('none');
-                      }}
-                      className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-2 my-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = !sfxEnabled;
-                        setSfxEnabled(next);
-                        if (next) soundRef.current.playScore();
-                      }}
-                      className="w-full min-h-[48px] px-3 py-2 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5 text-right">
-                        <Volume2 className="w-4 h-4 text-amber-400 shrink-0" />
-                        <div>
-                          <div className="text-xs font-bold text-slate-100">
-                            المؤثرات الصوتية (SFX)
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            أصوات القفز والنقاط والقدرات
-                          </div>
-                        </div>
-                      </div>
-                      <span
-                        className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
-                          sfxEnabled
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                            : 'bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        {sfxEnabled ? 'مفعّل' : 'مغلق'}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        setMusicEnabled((v) => !v);
-                      }}
-                      className="w-full min-h-[48px] px-3 py-2 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5 text-right">
-                        <Music className="w-4 h-4 text-sky-400 shrink-0" />
-                        <div>
-                          <div className="text-xs font-bold text-slate-100">
-                            موسيقى الخلفية (8-Bit Music)
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            ألحان أركيد تفاعلية أثناء اللعب
-                          </div>
-                        </div>
-                      </div>
-                      <span
-                        className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
-                          musicEnabled
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                            : 'bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        {musicEnabled ? 'مفعّل' : 'مغلق'}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = !hapticsEnabled;
-                        setHapticsEnabled(next);
-                        soundRef.current.hapticsEnabled = next;
-                        if (next) soundRef.current.triggerHaptic(50);
-                        soundRef.current.playClick();
-                      }}
-                      className="w-full min-h-[48px] px-3 py-2 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5 text-right">
-                        <Vibrate className="w-4 h-4 text-purple-400 shrink-0" />
-                        <div>
-                          <div className="text-xs font-bold text-slate-100">
-                            الاهتزاز (Haptics)
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            اهتزاز الهاتف عند الاصطدام والنقاط
-                          </div>
-                        </div>
-                      </div>
-                      <span
-                        className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
-                          hapticsEnabled
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                            : 'bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        {hapticsEnabled ? 'مفعّل' : 'مغلق'}
-                      </span>
-                    </button>
-
-                    {/* Difficulty Selection */}
-                    <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800">
-                      <div className="text-xs font-bold text-slate-200 mb-1.5">
-                        مستوى الصعوبة (Difficulty)
-                      </div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {(['easy', 'normal', 'hard'] as DifficultyLevel[]).map((lvl) => {
-                          const d = DIFFICULTY_CONFIGS[lvl];
-                          const active = difficulty === lvl;
-                          return (
-                            <button
-                              key={lvl}
-                              type="button"
-                              onClick={() => {
-                                soundRef.current.playClick();
-                                setDifficulty(lvl);
-                              }}
-                              className={`min-h-[40px] py-1.5 px-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                                active
-                                  ? 'bg-amber-400 text-slate-950 border-amber-300'
-                                  : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
-                              }`}
-                            >
-                              {d.labelAr} ({d.labelEn})
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Stage / Biome Progression Selection */}
-                    <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800">
-                      <div className="text-xs font-bold text-slate-200 mb-1.5">
-                        نظام المراحل والخلفيات (Stages & Biomes)
-                      </div>
-                      <div className="grid grid-cols-5 gap-1">
-                        {(
-                          [
-                            { id: 'auto', label: 'تلقائي' },
-                            { id: 'day', label: 'نهار' },
-                            { id: 'sunset', label: 'غروب' },
-                            { id: 'night', label: 'ليل' },
-                            { id: 'cosmos', label: 'فضاء' },
-                          ] as { id: StageModeOption; label: string }[]
-                        ).map((st) => (
-                          <button
-                            key={st.id}
-                            type="button"
-                            onClick={() => {
-                              soundRef.current.playClick();
-                              setStageMode(st.id);
-                            }}
-                            className={`min-h-[38px] rounded-lg text-[11px] font-bold border cursor-pointer ${
-                              stageMode === st.id
-                                ? 'bg-sky-400 text-slate-950 border-sky-300'
-                                : 'bg-slate-800 text-slate-300 border-slate-700'
-                            }`}
-                          >
-                            {st.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('none');
-                    }}
-                    className="w-full min-h-[46px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm cursor-pointer"
-                  >
-                    حفظ والعودة
-                  </button>
-                </div>
-              )}
-
-              {/* ===================================================================
-                  5. CHARACTER SHOP & SKINS MODAL (متجر شراء الشخصيات بالعملات)
-                 =================================================================== */}
-              {activeModal === 'skins' && (
-                <div
-                  dir="rtl"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
-                >
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                    <div>
-                      <h3 className="text-base font-bold text-white">
-                        متجر الطيور (Character Shop)
-                      </h3>
-                      <p className="text-xs text-amber-300 font-mono">
-                        رصيدك الحالي: {dailyState.coins} عملة
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        setActiveModal('none');
-                      }}
-                      className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-2 my-2.5 overflow-y-auto pr-0.5">
-                    {SHOP_BIRDS.map((item) => {
-                      const isUnlocked = profile.unlockedSkins.includes(item.id);
-                      const isSelected = selectedSkin === item.id;
-                      const canAfford = dailyState.coins >= item.priceCoins;
-
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => handleSelectOrBuyBird(item)}
-                          className={`w-full min-h-[54px] px-3 py-2 rounded-2xl border flex items-center justify-between transition-colors cursor-pointer ${
-                            isSelected
-                              ? 'bg-amber-400/15 border-amber-400 text-white'
-                              : isUnlocked
-                              ? 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800/70'
-                              : 'bg-slate-900/60 border-slate-800/80 text-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-11 h-9 rounded-xl bg-[#70c5ce] border border-slate-700 flex items-center justify-center shrink-0">
-                              {skinPreviews[item.id] && (
-                                <img
-                                  src={skinPreviews[item.id]}
-                                  alt={item.nameEn}
-                                  referrerPolicy="no-referrer"
-                                  className="pixelated-canvas w-8 h-6"
-                                />
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs font-bold text-slate-100">
-                                {item.nameAr}
-                              </div>
-                              <div className="text-[10px] text-slate-400">
-                                {item.descAr}
-                              </div>
-                            </div>
-                          </div>
-
-                          {isSelected ? (
-                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 shrink-0">
-                              مُجهّز
-                            </span>
-                          ) : isUnlocked ? (
-                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-emerald-300 shrink-0">
-                              اختيار
-                            </span>
-                          ) : (
-                            <span
-                              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shrink-0 ${
-                                canAfford
-                                  ? 'bg-emerald-400 text-slate-950'
-                                  : 'bg-slate-800 text-amber-300'
-                              }`}
-                            >
-                              <Lock className="w-3 h-3" />
-                              <span>{item.priceCoins} عملة</span>
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('none');
-                    }}
-                    className="w-full min-h-[44px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm cursor-pointer"
-                  >
-                    العودة للقائمة
-                  </button>
-                </div>
-              )}
-
-              {/* ===================================================================
-                  6. ACHIEVEMENTS MODAL (شاشة الإنجازات والمكافآت)
-                 =================================================================== */}
-              {activeModal === 'achievements' && (
-                <div
-                  dir="rtl"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
-                >
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                    <div>
-                      <h3 className="text-base font-bold text-white">
-                        الإنجازات والمكافآت (Achievements)
-                      </h3>
-                      <p className="text-xs text-emerald-300 font-mono">
-                        مكتمل: {profile.unlockedAchievements.length} من {ACHIEVEMENTS_LIST.length}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        setActiveModal('none');
-                      }}
-                      className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-2 my-2.5 overflow-y-auto pr-0.5">
-                    {ACHIEVEMENTS_LIST.map((ach) => {
-                      const unlocked = profile.unlockedAchievements.includes(ach.id);
-                      return (
-                        <div
-                          key={ach.id}
-                          className={`p-3 rounded-2xl border flex items-center justify-between gap-2 ${
-                            unlocked
-                              ? 'bg-emerald-500/15 border-emerald-500/40 text-white'
-                              : 'bg-slate-900/70 border-slate-800 text-slate-400'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 text-right">
-                            <div
-                              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                                unlocked
-                                  ? 'bg-emerald-400 text-slate-950'
-                                  : 'bg-slate-800 text-slate-500'
-                              }`}
-                            >
-                              <Trophy className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <div className="text-xs font-bold text-slate-100">
-                                {ach.titleAr}
-                              </div>
-                              <div className="text-[10px] text-slate-400">
-                                {ach.descAr}
-                              </div>
-                            </div>
-                          </div>
-
-                          <span
-                            className={`text-[11px] font-mono font-bold px-2 py-1 rounded-lg shrink-0 ${
-                              unlocked
-                                ? 'bg-emerald-400/20 text-emerald-300'
-                                : 'bg-slate-800 text-amber-300'
-                            }`}
-                          >
-                            {unlocked ? 'مكتمل ✓' : `+${ach.rewardCoins} عملة`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundRef.current.playClick();
-                      setActiveModal('none');
-                    }}
-                    className="w-full min-h-[44px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm cursor-pointer"
-                  >
-                    العودة
-                  </button>
-                </div>
-              )}
-
-              {/* ===================================================================
-                  7. BEST SCORE & GLOBAL LEADERBOARD MODAL (شاشة أفضل نتيجة والترتيب العالمي)
-                 =================================================================== */}
-              {activeModal === 'leaderboard' && (
-                <div
-                  dir="rtl"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
-                >
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                    <div>
-                      <h3 className="text-base font-bold text-white">
-                        أفضل نتيجة ولوحة الترتيب
-                      </h3>
-                      <p className="text-xs text-slate-400">
-                        أفضل نتيجة لك: <strong className="text-amber-300">{telemetry.bestScore}</strong> · لقبك:{' '}
-                        <button
-                          type="button"
-                          onClick={handleCyclePilotName}
-                          className="text-sky-300 underline cursor-pointer"
-                        >
-                          {profile.playerName} (تغيير)
-                        </button>
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        setActiveModal('none');
-                      }}
-                      className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5 my-2.5 overflow-y-auto pr-0.5 font-mono tabular-nums">
-                    {leaderboard.slice(0, 8).map((entry, idx) => (
-                      <div
-                        key={entry.id}
-                        className={`px-3 py-2 rounded-xl border flex items-center justify-between text-xs ${
-                          idx === 0
-                            ? 'bg-amber-400/15 border-amber-400/50 text-amber-200'
-                            : 'bg-slate-900 border-slate-800 text-slate-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 text-center font-bold text-slate-400">
-                            #{idx + 1}
-                          </span>
-                          <span className="font-bold">{entry.playerName}</span>
-                          <span className="text-[10px] text-slate-400">
-                            Stage {entry.stageReached}
-                          </span>
-                        </div>
-                        <span className="font-extrabold text-sm text-emerald-400">
-                          {entry.score}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={isSubmittingScore || telemetry.bestScore < 1}
-                      onClick={() =>
-                        submitScoreToLeaderboard(
-                          telemetry.bestScore,
-                          difficulty,
-                          selectedSkin
-                        )
-                      }
-                      className="flex-1 min-h-[44px] rounded-xl bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 text-slate-950 font-bold text-xs cursor-pointer"
-                    >
-                      {isSubmittingScore ? 'جاري التحديث...' : 'رفع أفضل نتيجة للترتيب'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundRef.current.playClick();
-                        setActiveModal('none');
-                      }}
-                      className="px-4 min-h-[44px] rounded-xl bg-slate-800 text-slate-200 font-bold text-xs cursor-pointer"
-                    >
-                      إغلاق
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ===================================================================
-                  8. iOS SAFARI INSTALL GUIDE MODAL
-                 =================================================================== */}
-              {activeModal === 'ios_install' && (
-                <div
-                  dir="rtl"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="absolute inset-0 z-40 flex items-center justify-center p-5 bg-slate-950/90 backdrop-blur-md"
-                >
-                  <div className="w-full bg-slate-900 border border-slate-700 rounded-3xl p-5 text-right flex flex-col gap-3">
-                    <h3 className="text-base font-bold text-white">
-                      تثبيت اللعبة على iPhone / iPad
-                    </h3>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      1. اضغط على زر <strong>المشاركة (Share)</strong> في شريط متصفح Safari.<br />
-                      2. اختر <strong>الإضافة إلى الشاشة الرئيسية (Add to Home Screen)</strong> لتعمل اللعبة بملء الشاشة.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setActiveModal('none')}
-                      className="w-full min-h-[44px] rounded-xl bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer"
-                    >
-                      حسناً، فهمت
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Unboxed clean metadata strip under canvas */}
-          <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-400 font-mono tabular-nums">
-            <span>9:16 Portrait (288×512)</span>
-            <span aria-hidden="true">·</span>
-            <span>{telemetry.stageNameAr}</span>
-            <span aria-hidden="true">·</span>
-            <span>Capacitor Android & iOS Ready</span>
-          </div>
-        </section>
-
-        {/* Right Column: Interactive Studio, Shop, Achievements, Leaderboard & Capacitor Build Guide */}
-        <section className="lg:col-span-7 flex flex-col gap-6 w-full">
-          {/* Quick Control Bar */}
-          <div className="p-5 sm:p-6 bg-slate-900/70 border border-slate-800 rounded-2xl flex flex-col gap-5">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
-              <div>
-                <h1 className="text-xl font-bold text-slate-100">
-                  FLAPPY WING — Mobile & Capacitor Arcade Edition
-                </h1>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  4 Dynamic Stages · In-Game Power-Ups & Coins · Character Shop · Achievements · Capacitor Android & iOS
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundRef.current.playClick();
-                    setActiveModal('skins');
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-slate-800/80 border border-slate-700 text-slate-200 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <Palette className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Shop ({profile.unlockedSkins.length}/{SHOP_BIRDS.length})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundRef.current.playClick();
-                    setActiveModal('achievements');
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-slate-800/80 border border-slate-700 text-slate-200 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <Trophy className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>
-                    Achievements ({profile.unlockedAchievements.length}/{ACHIEVEMENTS_LIST.length})
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowHitboxes((v) => !v)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                    showHitboxes
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                      : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>{showHitboxes ? 'Hitbox: On' : 'Hitbox'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Live Score, Best Score, Wing Coins & Stage Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono tabular-nums">
-              <div className="flex flex-col">
-                <span className="text-xs text-slate-400">Live Score</span>
-                <span className="text-lg font-bold text-slate-100 mt-0.5">
-                  {telemetry.score}
-                </span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs text-slate-400">Best Score</span>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-lg font-bold text-emerald-400">
-                    {telemetry.bestScore}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleResetHighScore}
-                    title="Reset Best Score"
-                    className="text-xs text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs text-slate-400">Wing Coins</span>
-                <div className="flex items-center gap-1.5 mt-0.5 text-lg font-bold text-amber-400">
-                  <Coins className="w-4 h-4" />
-                  <span>{dailyState.coins}</span>
-                </div>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs text-slate-400">Current Stage</span>
-                <span className="text-sm font-bold text-sky-400 mt-1">
-                  Stage {telemetry.stageNumber}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Mobile Tab Bar */}
-          <div className="flex md:hidden items-center gap-1 p-1 bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto">
-            {(['arcade', 'leaderboard', 'physics', 'audio', 'source'] as ActiveTab[]).map(
-              (tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex-1 py-2 px-2 text-xs font-medium rounded-lg capitalize transition-colors whitespace-nowrap shrink-0 ${
-                    activeTab === tab
-                      ? 'bg-slate-800 text-amber-400'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {tab}
-                </button>
-              )
-            )}
-          </div>
-
-          {/* Tab Content Area */}
-          {activeTab === 'arcade' && (
-            <div className="p-5 sm:p-6 bg-slate-900/70 border border-slate-800 rounded-2xl flex flex-col gap-6">
-              {/* Daily Challenge Panel */}
-              <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col gap-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Target className="w-4 h-4 text-amber-400" />
-                    <h2 className="text-sm font-semibold text-slate-100">
-                      Daily Challenge · تحدي اليوم ({dailyState.dateKey})
-                    </h2>
-                  </div>
-                  <div className="text-xs font-mono tabular-nums text-amber-300">
-                    Reward: +{activeChallenge.rewardCoins} Wing Coins · {activeChallenge.badgeNameEn}
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-100">
-                      {activeChallenge.titleEn}
-                    </div>
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      {activeChallenge.titleAr}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-sm font-mono tabular-nums font-bold text-slate-200">
-                      {dailyState.progress} / {activeChallenge.target}
+                  {/* Daily Challenge Quick Status inside Game Over */}
+                  <div className="pt-2 border-t border-[#c4ba70] flex items-center justify-between text-xs">
+                    <span className="font-bold text-[#543847] truncate">
+                      {isAr
+                        ? `تحدي اليوم: ${dailyState.progress}/${activeChallenge.target}`
+                        : `Daily Goal: ${dailyState.progress}/${activeChallenge.target}`}
                     </span>
                     {dailyState.completed && !dailyState.claimed ? (
                       <button
                         type="button"
                         onClick={handleClaimDailyReward}
-                        className="px-3.5 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs whitespace-nowrap shrink-0 cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px] cursor-pointer"
                       >
-                        Claim +{activeChallenge.rewardCoins} Coins
+                        {isAr
+                          ? `استلام +${activeChallenge.rewardCoins} عملة`
+                          : `Claim +${activeChallenge.rewardCoins}`}
                       </button>
-                    ) : dailyState.claimed ? (
-                      <button
-                        type="button"
-                        onClick={handleNextBonusChallenge}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>Next Bonus Goal</span>
-                      </button>
-                    ) : null}
+                    ) : (
+                      <span className="text-[11px] font-semibold text-[#7a591b] truncate max-w-[160px]">
+                        {dailyState.claimed
+                          ? isAr
+                            ? 'مكتمل ومُستلم'
+                            : 'Claimed ✓'
+                          : isAr
+                          ? activeChallenge.titleAr
+                          : activeChallenge.titleEn}
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-amber-400 transition-transform duration-150 origin-left"
-                    style={{
-                      transform: `scaleX(${challengeProgressPercent / 100})`,
-                    }}
-                  />
+                {/* Bottom Thumb-Zone Action Buttons */}
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={startNewGameSession}
+                    className="w-full min-h-[50px] rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-base flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-transform cursor-pointer"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                    <span>{isAr ? 'إعادة المحاولة' : 'Play Again'}</span>
+                  </button>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleShareScore}
+                      className="min-h-[44px] rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{isAr ? 'مشاركة' : 'Share'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        soundRef.current.playClick();
+                        setActiveModal('skins');
+                      }}
+                      className="min-h-[44px] rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
+                    >
+                      <Palette className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{isAr ? 'المتجر' : 'Shop'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={goToMainMenu}
+                      className="min-h-[44px] rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white font-semibold text-xs border border-white/15 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
+                    >
+                      <Home className="w-3.5 h-3.5 text-sky-400" />
+                      <span>{isAr ? 'الرئيسية' : 'Home'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
+            )}
 
-              {/* Character Shop Grid */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-slate-100">
-                    متجر الشخصيات بالعملات · Bird Character Shop
-                  </h2>
-                  <span className="text-xs text-amber-300 font-mono">
-                    {dailyState.coins} Wing Coins Available
-                  </span>
+            {/* ===================================================================
+                4. SETTINGS MODAL (شاشة الإعدادات واللغة والمراحل والصعوبة)
+               =================================================================== */}
+            {activeModal === 'settings' && (
+              <div
+                dir={dirAttr}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-base font-bold text-white">
+                      {isAr ? 'الإعدادات' : 'Settings'}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setActiveModal('none');
+                    }}
+                    className="min-w-[38px] min-h-[38px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+
+                <div className="flex flex-col gap-1.5 my-1.5">
+                  {/* Language Selection: Arabic / English */}
+                  <div className="p-2.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span className="text-xs font-bold text-slate-100">
+                        {isAr ? 'اللغة (Language)' : 'Language (اللغة)'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 w-36">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          soundRef.current.playClick();
+                          setLanguage('ar');
+                        }}
+                        className={`min-h-[34px] rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                          language === 'ar'
+                            ? 'bg-emerald-400 text-slate-950 border-emerald-300'
+                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        العربية
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          soundRef.current.playClick();
+                          setLanguage('en');
+                        }}
+                        className={`min-h-[34px] rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                          language === 'en'
+                            ? 'bg-emerald-400 text-slate-950 border-emerald-300'
+                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        English
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !sfxEnabled;
+                      setSfxEnabled(next);
+                      if (next) soundRef.current.playScore();
+                    }}
+                    className="w-full min-h-[44px] px-3 py-1.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 text-start">
+                      <Volume2 className="w-4 h-4 text-amber-400 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold text-slate-100">
+                          {isAr ? 'المؤثرات الصوتية' : 'Sound Effects (SFX)'}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {isAr ? 'أصوات القفز والنقاط والقدرات' : 'Flap, score, and power-up sounds'}
+                        </div>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                        sfxEnabled
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {sfxEnabled ? (isAr ? 'مفعّل' : 'ON') : isAr ? 'مغلق' : 'OFF'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setMusicEnabled((v) => !v);
+                    }}
+                    className="w-full min-h-[44px] px-3 py-1.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 text-start">
+                      <Music className="w-4 h-4 text-sky-400 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold text-slate-100">
+                          {isAr ? 'موسيقى الخلفية' : '8-Bit Background Music'}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {isAr ? 'ألحان أركيد تفاعلية أثناء اللعب' : 'Retro chiptune melody loop'}
+                        </div>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                        musicEnabled
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {musicEnabled ? (isAr ? 'مفعّل' : 'ON') : isAr ? 'مغلق' : 'OFF'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !hapticsEnabled;
+                      setHapticsEnabled(next);
+                      soundRef.current.hapticsEnabled = next;
+                      if (next) soundRef.current.triggerHaptic(50);
+                      soundRef.current.playClick();
+                    }}
+                    className="w-full min-h-[44px] px-3 py-1.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 text-start">
+                      <Vibrate className="w-4 h-4 text-purple-400 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold text-slate-100">
+                          {isAr ? 'الاهتزاز التفاعلي' : 'Haptic Vibration'}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {isAr ? 'اهتزاز الهاتف عند الاصطدام والنقاط' : 'Vibrate on score and collision'}
+                        </div>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                        hapticsEnabled
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {hapticsEnabled ? (isAr ? 'مفعّل' : 'ON') : isAr ? 'مغلق' : 'OFF'}
+                    </span>
+                  </button>
+
+                  {/* Difficulty Selection */}
+                  <div className="p-2.5 rounded-2xl bg-slate-900 border border-slate-800">
+                    <div className="text-xs font-bold text-slate-200 mb-1.5">
+                      {isAr ? 'مستوى الصعوبة' : 'Difficulty Level'}
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['easy', 'normal', 'hard'] as DifficultyLevel[]).map((lvl) => {
+                        const d = DIFFICULTY_CONFIGS[lvl];
+                        const active = difficulty === lvl;
+                        return (
+                          <button
+                            key={lvl}
+                            type="button"
+                            onClick={() => {
+                              soundRef.current.playClick();
+                              setDifficulty(lvl);
+                            }}
+                            className={`min-h-[36px] py-1 px-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                              active
+                                ? 'bg-amber-400 text-slate-950 border-amber-300'
+                                : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
+                            }`}
+                          >
+                            {isAr ? d.labelAr : d.labelEn}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Stage / Biome Progression Selection */}
+                  <div className="p-2.5 rounded-2xl bg-slate-900 border border-slate-800">
+                    <div className="text-xs font-bold text-slate-200 mb-1.5">
+                      {isAr ? 'نظام المراحل والخلفيات' : 'Stages & Biomes'}
+                    </div>
+                    <div className="grid grid-cols-5 gap-1">
+                      {(
+                        [
+                          { id: 'auto', labelAr: 'تلقائي', labelEn: 'Auto' },
+                          { id: 'day', labelAr: 'نهار', labelEn: 'Day' },
+                          { id: 'sunset', labelAr: 'غروب', labelEn: 'Sunset' },
+                          { id: 'night', labelAr: 'ليل', labelEn: 'Night' },
+                          { id: 'cosmos', labelAr: 'فضاء', labelEn: 'Cosmos' },
+                        ] as { id: StageModeOption; labelAr: string; labelEn: string }[]
+                      ).map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => {
+                            soundRef.current.playClick();
+                            setStageMode(st.id);
+                          }}
+                          className={`min-h-[34px] rounded-lg text-[11px] font-bold border cursor-pointer ${
+                            stageMode === st.id
+                              ? 'bg-sky-400 text-slate-950 border-sky-300'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}
+                        >
+                          {isAr ? st.labelAr : st.labelEn}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundRef.current.playClick();
+                    setActiveModal('none');
+                  }}
+                  className="w-full min-h-[44px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm cursor-pointer"
+                >
+                  {isAr ? 'حفظ والعودة' : 'Save & Back'}
+                </button>
+              </div>
+            )}
+
+            {/* ===================================================================
+                5. CHARACTER SHOP & SKINS MODAL (متجر شراء الشخصيات بالعملات)
+               =================================================================== */}
+            {activeModal === 'skins' && (
+              <div
+                dir={dirAttr}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
+              >
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      {isAr ? 'متجر الطيور' : 'Character Shop'}
+                    </h3>
+                    <p className="text-xs text-amber-300 font-mono">
+                      {isAr
+                        ? `رصيدك الحالي: ${dailyState.coins} عملة`
+                        : `Your Balance: ${dailyState.coins} Coins`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setActiveModal('none');
+                    }}
+                    className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2 my-2.5 overflow-y-auto pr-0.5">
                   {SHOP_BIRDS.map((item) => {
                     const isUnlocked = profile.unlockedSkins.includes(item.id);
-                    const active = selectedSkin === item.id;
+                    const isSelected = selectedSkin === item.id;
+                    const canAfford = dailyState.coins >= item.priceCoins;
+
                     return (
                       <button
                         key={item.id}
                         type="button"
                         onClick={() => handleSelectOrBuyBird(item)}
-                        className={`p-3 rounded-xl border flex items-center gap-3 text-left transition-colors cursor-pointer ${
-                          active
-                            ? 'bg-amber-400/15 border-amber-400 text-slate-100'
+                        className={`w-full min-h-[54px] px-3 py-2 rounded-2xl border flex items-center justify-between transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-400/15 border-amber-400 text-white'
                             : isUnlocked
-                            ? 'bg-slate-900/70 border-slate-800 text-slate-200 hover:border-slate-700'
-                            : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:border-slate-700'
+                            ? 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800/70'
+                            : 'bg-slate-900/60 border-slate-800/80 text-slate-300'
                         }`}
                       >
-                        <div className="w-11 h-9 rounded-lg bg-[#70c5ce] border border-slate-700 flex items-center justify-center shrink-0">
-                          {skinPreviews[item.id] && (
-                            <img
-                              src={skinPreviews[item.id]}
-                              alt={item.nameEn}
-                              referrerPolicy="no-referrer"
-                              className="pixelated-canvas w-8 h-6"
-                            />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-bold text-slate-100 truncate">
-                            {item.nameAr}
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-9 rounded-xl bg-[#70c5ce] border border-slate-700 flex items-center justify-center shrink-0">
+                            {skinPreviews[item.id] && (
+                              <img
+                                src={skinPreviews[item.id]}
+                                alt={item.nameEn}
+                                referrerPolicy="no-referrer"
+                                className="pixelated-canvas w-8 h-6"
+                              />
+                            )}
                           </div>
-                          <div className="text-[11px] font-mono text-amber-400 mt-0.5">
-                            {active
-                              ? 'Equipped'
-                              : isUnlocked
-                              ? 'Unlocked'
-                              : `${item.priceCoins} Coins`}
+                          <div className="text-start">
+                            <div className="text-xs font-bold text-slate-100">
+                              {isAr ? item.nameAr : item.nameEn}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {isAr ? item.descAr : item.descEn}
+                            </div>
                           </div>
                         </div>
+
+                        {isSelected ? (
+                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 shrink-0">
+                            {isAr ? 'مُجهّز' : 'Equipped'}
+                          </span>
+                        ) : isUnlocked ? (
+                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-emerald-300 shrink-0">
+                            {isAr ? 'اختيار' : 'Select'}
+                          </span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shrink-0 ${
+                              canAfford
+                                ? 'bg-emerald-400 text-slate-950'
+                                : 'bg-slate-800 text-amber-300'
+                            }`}
+                          >
+                            <Lock className="w-3 h-3" />
+                            <span>
+                              {item.priceCoins} {isAr ? 'عملة' : 'Coins'}
+                            </span>
+                          </span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
-              </div>
 
-              {/* Power-Ups & Stages Legend */}
-              <div className="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
-                    <Shield className="w-3.5 h-3.5" />
-                    <span>الدرع الواقي · Shield Orb</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    يحميك من اصطدام كامل بأنبوب أو بالأرض لمرة واحدة.
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>مغناطيس العملات · Magnet</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    يجذب العملات الذهبية تلقائياً نحو الطائر لمدة 8 ثوانٍ.
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-purple-400">
-                    <Sun className="w-3.5 h-3.5" />
-                    <span>تبطيء الزمن · Slow-Mo</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    يبطئ سرعة الأنابيب بنسبة 30% لمدة 6 ثوانٍ للعبور الآمن.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'leaderboard' && (
-            <div className="p-6 bg-slate-900/70 border border-slate-800 rounded-2xl flex flex-col gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-100">
-                    لوحة الترتيب العالمية · Global Server Leaderboard
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Connected to secure Express API (`/api/leaderboard`) with automatic offline caching.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCyclePilotName}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-sky-300 border border-slate-700 cursor-pointer"
-                  >
-                    Pilot: {profile.playerName}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={fetchLeaderboard}
-                    className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold cursor-pointer"
-                  >
-                    Refresh
-                  </button>
-                </div>
-              </div>
-
-              <div className="divide-y divide-slate-800/80 font-mono tabular-nums text-xs">
-                {leaderboard.map((entry, idx) => (
-                  <div
-                    key={entry.id}
-                    className="py-2.5 flex items-center justify-between gap-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="w-6 font-bold text-slate-400">#{idx + 1}</span>
-                      <span className="font-semibold text-slate-100">
-                        {entry.playerName}
-                      </span>
-                      <span className="text-slate-400 capitalize">
-                        {entry.difficulty} · Stage {entry.stageReached}
-                      </span>
-                    </div>
-                    <span className="text-sm font-bold text-emerald-400">
-                      {entry.score} pts
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'physics' && (
-            <div className="p-6 bg-slate-900/70 border border-slate-800 rounded-2xl flex flex-col gap-4">
-              <h2 className="text-base font-semibold text-slate-100">
-                Capacitor Android & iOS Build Guide + Mobile Architecture
-              </h2>
-              <div className="divide-y divide-slate-800/80 text-sm">
-                <div className="py-3 flex items-center justify-between gap-4">
-                  <span className="text-slate-300">App ID / Bundle Identifier</span>
-                  <span className="font-mono text-xs text-amber-400">
-                    com.flappywing.arcade (configurable in capacitor.config.ts)
-                  </span>
-                </div>
-                <div className="py-3 flex items-center justify-between gap-4">
-                  <span className="text-slate-300">Native Platforms Generated</span>
-                  <span className="font-mono text-xs text-emerald-400">
-                    /android (Android Studio) · /ios (Xcode) · /dist (Web PWA)
-                  </span>
-                </div>
-                <div className="py-3 flex items-center justify-between gap-4">
-                  <span className="text-slate-300">Build & Sync Command</span>
-                  <span className="font-mono text-xs text-slate-200">
-                    npm run build && npx cap sync
-                  </span>
-                </div>
-                <div className="py-3 flex items-center justify-between gap-4">
-                  <span className="text-slate-300">Open in Android Studio / Xcode</span>
-                  <span className="font-mono text-xs text-slate-200">
-                    npm run cap:android · npm run cap:ios
-                  </span>
-                </div>
-                <div className="py-3 flex items-center justify-between gap-4">
-                  <span className="text-slate-300">Background Lifecycle Protection</span>
-                  <span className="font-mono text-xs text-slate-200">
-                    Auto-Pause & Audio Suspend on visibilitychange / blur
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'audio' && (
-            <div className="p-6 bg-slate-900/70 border border-slate-800 rounded-2xl flex flex-col gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-100">
-                    Web Audio API 8-Bit SFX & Chiptune Synthesizer
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    100% procedural synthesis without external audio files.
-                  </p>
-                </div>
                 <button
                   type="button"
-                  onClick={() => setMusicEnabled((v) => !v)}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
-                    musicEnabled
-                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                      : 'bg-slate-800 border-slate-700 text-slate-300'
-                  }`}
+                  onClick={() => {
+                    soundRef.current.playClick();
+                    setActiveModal('none');
+                  }}
+                  className="w-full min-h-[44px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm cursor-pointer"
                 >
-                  <Music className="w-3.5 h-3.5" />
-                  <span>{musicEnabled ? '8-Bit Music: Playing' : 'Play 8-Bit Music'}</span>
+                  {isAr ? 'العودة للقائمة' : 'Back to Menu'}
                 </button>
               </div>
+            )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-                {[
-                  {
-                    label: 'Flap (Whoosh)',
-                    desc: 'Bandpass white-noise burst + 210→520Hz triangle sweep',
-                    play: () => soundRef.current.playFlap(),
-                  },
-                  {
-                    label: 'Score / Coin (B5→E6)',
-                    desc: 'Two-tone square chime stepping B5 to E6',
-                    play: () => soundRef.current.playScore(),
-                  },
-                  {
-                    label: 'Power-Up Collected',
-                    desc: 'Ascending 4-note 8-bit arpeggio (C5→E5→G5→C6)',
-                    play: () => soundRef.current.playPowerUp(),
-                  },
-                  {
-                    label: 'Shield Deflection',
-                    desc: 'Protective sawtooth energy deflection + haptic pulse',
-                    play: () => soundRef.current.playShieldBreak(),
-                  },
-                  {
-                    label: 'Hit + Haptic Vibration',
-                    desc: '150→32Hz sawtooth drop + noise burst + navigator.vibrate',
-                    play: () => soundRef.current.playHit(),
-                  },
-                  {
-                    label: 'Die (Falling Pitch Slide)',
-                    desc: '640→115Hz downward triangle pitch slide over 350ms',
-                    play: () => soundRef.current.playDie(),
-                  },
-                ].map((item) => (
+            {/* ===================================================================
+                6. ACHIEVEMENTS MODAL (شاشة الإنجازات والمكافآت)
+               =================================================================== */}
+            {activeModal === 'achievements' && (
+              <div
+                dir={dirAttr}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
+              >
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      {isAr ? 'الإنجازات والمكافآت' : 'Achievements & Rewards'}
+                    </h3>
+                    <p className="text-xs text-emerald-300 font-mono">
+                      {isAr
+                        ? `مكتمل: ${profile.unlockedAchievements.length} من ${ACHIEVEMENTS_LIST.length}`
+                        : `Unlocked: ${profile.unlockedAchievements.length} / ${ACHIEVEMENTS_LIST.length}`}
+                    </p>
+                  </div>
                   <button
-                    key={item.label}
                     type="button"
-                    onClick={item.play}
-                    className="p-3.5 text-left rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/80 transition-colors flex items-start justify-between gap-3 cursor-pointer"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setActiveModal('none');
+                    }}
+                    className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
                   >
-                    <div>
-                      <div className="text-xs font-semibold text-slate-100">
-                        {item.label}
-                      </div>
-                      <div className="text-xs text-slate-400 mt-1">{item.desc}</div>
-                    </div>
-                    <Play className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <X className="w-4 h-4" />
                   </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'source' && (
-            <div className="p-6 bg-slate-900/70 border border-slate-800 rounded-2xl flex flex-col gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-100">
-                    Self-Contained Single-File HTML5 Source
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Complete standalone HTML, CSS, and JS in one file with zero external dependencies.
-                  </p>
                 </div>
+
+                <div className="flex flex-col gap-2 my-2.5 overflow-y-auto pr-0.5">
+                  {ACHIEVEMENTS_LIST.map((ach) => {
+                    const unlocked = profile.unlockedAchievements.includes(ach.id);
+                    return (
+                      <div
+                        key={ach.id}
+                        className={`p-3 rounded-2xl border flex items-center justify-between gap-2 ${
+                          unlocked
+                            ? 'bg-emerald-500/15 border-emerald-500/40 text-white'
+                            : 'bg-slate-900/70 border-slate-800 text-slate-400'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 text-start">
+                          <div
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                              unlocked
+                                ? 'bg-emerald-400 text-slate-950'
+                                : 'bg-slate-800 text-slate-500'
+                            }`}
+                          >
+                            <Trophy className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-100">
+                              {isAr ? ach.titleAr : ach.titleEn}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {isAr ? ach.descAr : ach.descEn}
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`text-[11px] font-mono font-bold px-2 py-1 rounded-lg shrink-0 ${
+                            unlocked
+                              ? 'bg-emerald-400/20 text-emerald-300'
+                              : 'bg-slate-800 text-amber-300'
+                          }`}
+                        >
+                          {unlocked
+                            ? isAr
+                              ? 'مكتمل ✓'
+                              : 'Done ✓'
+                            : `+${ach.rewardCoins} ${isAr ? 'عملة' : 'Coins'}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundRef.current.playClick();
+                    setActiveModal('none');
+                  }}
+                  className="w-full min-h-[44px] rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm cursor-pointer"
+                >
+                  {isAr ? 'العودة' : 'Back'}
+                </button>
+              </div>
+            )}
+
+            {/* ===================================================================
+                7. BEST SCORE & GLOBAL LEADERBOARD MODAL (شاشة أفضل نتيجة والترتيب العالمي)
+               =================================================================== */}
+            {activeModal === 'leaderboard' && (
+              <div
+                dir={dirAttr}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute inset-0 z-40 flex flex-col justify-between p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto"
+              >
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      {isAr ? 'أفضل نتيجة ولوحة الترتيب' : 'Best Score & Leaderboard'}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {isAr ? 'أفضل نتيجة لك:' : 'Your Best:'}{' '}
+                      <strong className="text-amber-300">{telemetry.bestScore}</strong> ·{' '}
+                      {isAr ? 'لقبك:' : 'Callsign:'}{' '}
+                      <button
+                        type="button"
+                        onClick={handleCyclePilotName}
+                        className="text-sky-300 underline cursor-pointer"
+                      >
+                        {profile.playerName} ({isAr ? 'تغيير' : 'Change'})
+                      </button>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setActiveModal('none');
+                    }}
+                    className="min-w-[40px] min-h-[40px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-1.5 my-2.5 overflow-y-auto pr-0.5 font-mono tabular-nums">
+                  {leaderboard.slice(0, 8).map((entry, idx) => (
+                    <div
+                      key={entry.id}
+                      className={`px-3 py-2 rounded-xl border flex items-center justify-between text-xs ${
+                        idx === 0
+                          ? 'bg-amber-400/15 border-amber-400/50 text-amber-200'
+                          : 'bg-slate-900 border-slate-800 text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 text-center font-bold text-slate-400">
+                          #{idx + 1}
+                        </span>
+                        <span className="font-bold">{entry.playerName}</span>
+                        <span className="text-[10px] text-slate-400">
+                          {isAr ? `المرحلة ${entry.stageReached}` : `Stage ${entry.stageReached}`}
+                        </span>
+                      </div>
+                      <span className="font-extrabold text-sm text-emerald-400">
+                        {entry.score}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleCopyStandalone}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    disabled={isSubmittingScore || telemetry.bestScore < 1}
+                    onClick={() =>
+                      submitScoreToLeaderboard(
+                        telemetry.bestScore,
+                        difficulty,
+                        selectedSkin
+                      )
+                    }
+                    className="flex-1 min-h-[44px] rounded-xl bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 text-slate-950 font-bold text-xs cursor-pointer"
                   >
-                    {copiedSource ? (
+                    {isSubmittingScore
+                      ? isAr
+                        ? 'جاري التحديث...'
+                        : 'Submitting...'
+                      : isAr
+                      ? 'رفع أفضل نتيجة للترتيب'
+                      : 'Submit Best Score'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundRef.current.playClick();
+                      setActiveModal('none');
+                    }}
+                    className="px-4 min-h-[44px] rounded-xl bg-slate-800 text-slate-200 font-bold text-xs cursor-pointer"
+                  >
+                    {isAr ? 'إغلاق' : 'Close'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ===================================================================
+                8. iOS SAFARI INSTALL GUIDE MODAL
+               =================================================================== */}
+            {activeModal === 'ios_install' && (
+              <div
+                dir={dirAttr}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute inset-0 z-40 flex items-center justify-center p-5 bg-slate-950/90 backdrop-blur-md"
+              >
+                <div className="w-full bg-slate-900 border border-slate-700 rounded-3xl p-5 text-start flex flex-col gap-3">
+                  <h3 className="text-base font-bold text-white">
+                    {isAr ? 'تثبيت اللعبة على iPhone / iPad' : 'Install on iPhone / iPad'}
+                  </h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {isAr ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Copied HTML</span>
+                        1. اضغط على زر <strong>المشاركة (Share)</strong> في شريط متصفح Safari.
+                        <br />
+                        2. اختر <strong>الإضافة إلى الشاشة الرئيسية (Add to Home Screen)</strong> لتعمل اللعبة بملء الشاشة.
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copy Full Code</span>
+                        1. Tap the <strong>Share</strong> button in Safari.
+                        <br />
+                        2. Select <strong>Add to Home Screen</strong> to play in fullscreen.
                       </>
                     )}
-                  </button>
+                  </p>
                   <button
                     type="button"
-                    onClick={handleDownloadStandalone}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    onClick={() => setActiveModal('none')}
+                    className="w-full min-h-[44px] rounded-xl bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download .html</span>
+                    {isAr ? 'حسناً، فهمت' : 'Got It'}
                   </button>
                 </div>
               </div>
-
-              <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 font-mono overflow-x-auto max-h-[340px] leading-relaxed select-all">
-                <code>{STANDALONE_FLAPPY_HTML}</code>
-              </pre>
-            </div>
-          )}
-        </section>
+            )}
+          </div>
+        </div>
       </main>
     </div>
   );
